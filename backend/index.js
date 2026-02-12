@@ -4,11 +4,14 @@ const cors = require('cors');
 const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
-
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-app.use(cors());
+
+app.use(cors({
+    origin: '*', // Allow Vercel to access this
+    methods: ['GET', 'POST'] 
+}));
 app.use(express.json());
 
 // --- UPDATED ENDPOINT: Connect / Ping Printer ---
