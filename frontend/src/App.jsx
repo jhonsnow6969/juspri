@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, useMemo, lazy, Suspense, useEffect } from 'react';
 import axios from 'axios';
 import { Printer, CheckCircle, Wifi, FileUp, Loader2, AlertCircle, IndianRupee, Zap, QrCode, Upload } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,16 +22,42 @@ function App() {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-  // Memoized log function to prevent unnecessary re-renders
+  // Memoized log function
   const addLog = useCallback((msg) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 49)]);
   }, []);
 
-  // Memoized scan handler to prevent recreation on every render
+  // V2: Status polling when job is created
+  useEffect(() => {
+    if (!pricing?.job_id || status !== 'PRINTING') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/jobs/${pricing.job_id}/status`);
+        const jobStatus = response.data.status;
+        
+        addLog(`Status: ${jobStatus}`);
+        
+        if (jobStatus === 'COMPLETED') {
+          setStatus('COMPLETED');
+          clearInterval(pollInterval);
+        } else if (jobStatus === 'FAILED') {
+          setStatus('ERROR');
+          clearInterval(pollInterval);
+          addLog(`Print failed: ${response.data.error_message || 'Unknown error'}`);
+        }
+      } catch (e) {
+        console.error('Status poll error:', e);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [pricing?.job_id, status, API_URL, addLog]);
+
+  // Scan handler - V2: Expect kiosk_id in QR
   const handleScan = useCallback((detectedCodes) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
     
-    // Stop scanner immediately after successful scan
     setScannerActive(false);
     
     const rawValue = detectedCodes[0].rawValue;
@@ -40,16 +66,25 @@ function App() {
       
       if (rawValue.trim().startsWith('{')) {
         printerData = JSON.parse(rawValue);
+        // V2: Ensure kiosk_id exists
+        if (!printerData.kiosk_id) {
+          printerData.kiosk_id = printerData.ip || 'default_kiosk';
+        }
       } else {
-        printerData = { ssid: "Unknown_Network", ip: rawValue, port: 9100 };
+        // Fallback: use IP as kiosk_id
+        printerData = { 
+          kiosk_id: rawValue,
+          ip: rawValue, 
+          port: 9100 
+        };
       }
 
       setConfig(printerData);
       setStatus('SCANNED');
-      addLog(`QR Decoded: ${printerData.ip}`);
+      addLog(`QR Decoded: Kiosk ${printerData.kiosk_id}`);
     } catch (e) {
       addLog("Invalid QR Format");
-      setScannerActive(true); // Re-enable scanner on error
+      setScannerActive(true);
     }
   }, [addLog]);
 
@@ -58,29 +93,28 @@ function App() {
     setCameraError('Camera access denied. Allow permissions or use manual entry below.');
   }, []);
 
-  // Network check
+  // V2: Connect now just checks if kiosk is online
   const connectPrinter = useCallback(async () => {
     try {
       setStatus('CONNECTING');
-      addLog(`Connecting to ${config.ip}:${config.port}...`);
+      addLog(`Checking kiosk ${config.kiosk_id}...`);
       
       const response = await axios.post(`${API_URL}/api/connect`, {
-        ssid: config.ssid,
-        ip: config.ip, 
-        port: config.port || 9100
+        kiosk_id: config.kiosk_id
       }, { timeout: 5000 });
 
       if (response.data.status === 'connected') {
         setStatus('CONNECTED');
-        addLog(`✓ Connected to "${response.data.printer || 'printer'}"`);
+        addLog(`✓ Connected to "${response.data.kiosk_name || config.kiosk_id}"`);
+        addLog(`Printer: ${response.data.printer || 'Unknown'}`);
       }
     } catch (e) {
       setStatus('ERROR');
-      addLog("✗ Connection failed: " + (e.response?.data?.message || "Unreachable"));
+      addLog("✗ Kiosk offline or not found");
     }
   }, [config, API_URL, addLog]);
 
-  // Calculate pages & price
+  // V2: File select creates job on server
   const handleFileSelect = useCallback(async (selectedFile) => {
     if (!selectedFile) return;
     
@@ -91,53 +125,63 @@ function App() {
 
     setFile(selectedFile);
     setStatus('CALCULATING');
-    addLog(`Analyzing ${selectedFile.name}...`);
+    addLog(`Creating job for ${selectedFile.name}...`);
 
     const fd = new FormData();
     fd.append('file', selectedFile);
+    fd.append('kiosk_id', config.kiosk_id);
 
     try {
-      const response = await axios.post(`${API_URL}/api/count-pages`, fd, {
-        timeout: 10000
+      const response = await axios.post(`${API_URL}/api/jobs/create`, fd, {
+        timeout: 15000
       });
-      setPricing(response.data);
+      
+      setPricing({
+        job_id: response.data.job_id,
+        pages: response.data.pages,
+        pricePerPage: response.data.price_per_page,
+        totalPrice: response.data.total_cost,
+        estimatedTime: response.data.estimated_time_seconds
+      });
+      
       setStatus('PAYMENT');
-      addLog(`${response.data.pages} pages × ₹${response.data.pricePerPage} = ₹${response.data.totalPrice}`);
+      addLog(`Job ${response.data.job_id} created`);
+      addLog(`${response.data.pages} pages × ₹${response.data.price_per_page} = ₹${response.data.total_cost}`);
     } catch (e) {
       setStatus('CONNECTED');
-      addLog("Page analysis failed");
-      alert("Could not analyze PDF. Try again.");
+      addLog("Job creation failed");
+      alert("Could not create job. Try again.");
     }
-  }, [API_URL, addLog]);
+  }, [API_URL, addLog, config]);
 
-  // Payment handler
+  // V2: Payment verifies and authorizes print
   const handlePayment = useCallback(async () => {
-    addLog(`Payment initiated for ₹${pricing.totalPrice}`);
-    setStatus('PRINTING');
-    addLog("💳 Payment verified (MOCK)");
-    
-    setTimeout(() => {
-      executePrint();
-    }, 500);
-  }, [pricing]);
-
-  // Execute print
-  const executePrint = useCallback(async () => {
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('printerIP', config.ip);
-    fd.append('port', config.port || 9100);
+    addLog(`Verifying payment for ₹${pricing.totalPrice}...`);
     
     try {
-      await axios.post(`${API_URL}/api/print`, fd, { timeout: 15000 });
-      setStatus('COMPLETED');
-      addLog(`✓ Print job sent successfully`);
+      const response = await axios.post(
+        `${API_URL}/api/jobs/${pricing.job_id}/verify-payment`,
+        {
+          payment_id: 'MOCK_PAYMENT_' + Date.now(),
+          payment_signature: 'MOCK_SIGNATURE'
+        },
+        { timeout: 10000 }
+      );
+      
+      if (response.data.status === 'success') {
+        setStatus('PRINTING');
+        addLog('✓ Payment verified');
+        addLog(response.data.message);
+        
+        if (response.data.queue_position > 0) {
+          addLog(`Queue position: ${response.data.queue_position}`);
+        }
+      }
     } catch (e) {
-      setStatus('PAYMENT');
-      addLog("✗ Print failed");
-      alert("Print failed. Please try again.");
+      addLog('✗ Payment verification failed');
+      alert('Payment failed. Try again.');
     }
-  }, [file, config, API_URL, addLog]);
+  }, [pricing, API_URL, addLog]);
 
   const resetFlow = useCallback(() => {
     setStatus('IDLE');
@@ -170,18 +214,18 @@ function App() {
   const scannerConstraints = useMemo(() => ({
     facingMode: 'environment',
     aspectRatio: 1,
-    frameRate: { ideal: 30, max: 30 } // Limit frame rate for better performance
+    frameRate: { ideal: 30, max: 30 }
   }), []);
 
   const scannerComponents = useMemo(() => ({ 
     audio: false, 
     finder: false,
-    tracker: false // Disable tracker for better performance
+    tracker: false
   }), []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Optimized background - only render once */}
+      {/* Optimized background */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"></div>
@@ -206,7 +250,7 @@ function App() {
         
         <CardContent className="pt-6 space-y-6">
           
-          {/* VIEW 1: Camera Scanner - Lazy loaded and optimized */}
+          {/* VIEW 1: Camera Scanner */}
           {status === 'IDLE' && (
             <div className="space-y-4">
               <div className="aspect-square bg-gradient-to-br from-slate-950 to-slate-900 rounded-2xl overflow-hidden border-2 border-slate-700/50 relative shadow-inner">
@@ -221,7 +265,7 @@ function App() {
                       onError={handleScanError} 
                       components={scannerComponents}
                       constraints={scannerConstraints}
-                      scanDelay={300} // Scan every 300ms instead of continuous
+                      scanDelay={300}
                       styles={{ 
                         container: { height: '100%' },
                         video: { objectFit: 'cover' }
@@ -232,7 +276,7 @@ function App() {
                 <div className="absolute inset-0 border-4 border-blue-400/20 m-8 rounded-2xl pointer-events-none"></div>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-700/50">
                   <QrCode className="h-4 w-4 text-blue-400 inline mr-2"/>
-                  <span className="text-xs text-slate-300">Scan QR Code</span>
+                  <span className="text-xs text-slate-300">Scan Kiosk QR</span>
                 </div>
               </div>
               
@@ -243,7 +287,7 @@ function App() {
                 </div>
               )}
               
-              {/* Manual Input Fallback */}
+              {/* Manual Input */}
               <details className="group">
                 <summary className="cursor-pointer text-sm text-slate-400 hover:text-slate-300 flex items-center gap-2 p-3 rounded-lg hover:bg-slate-800/50 transition-colors">
                   <Upload className="h-4 w-4"/>
@@ -252,14 +296,14 @@ function App() {
                 <div className="mt-3 space-y-2 p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
                   <input 
                     type="text" 
-                    placeholder="Printer IP (e.g., 192.168.1.100)"
+                    placeholder="Kiosk ID (e.g., kiosk_001)"
                     className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && e.target.value) {
-                        const ip = e.target.value.trim();
-                        setConfig({ ssid: 'Manual', ip: ip, port: 9100 });
+                        const kioskId = e.target.value.trim();
+                        setConfig({ kiosk_id: kioskId, ip: kioskId });
                         setStatus('SCANNED');
-                        addLog(`Manual entry: ${ip}`);
+                        addLog(`Manual: ${kioskId}`);
                         setScannerActive(false);
                       }
                     }}
@@ -270,22 +314,18 @@ function App() {
             </div>
           )}
 
-          {/* VIEW 2: Connection Confirm */}
+          {/* VIEW 2: Connection */}
           {(status === 'SCANNED' || status === 'CONNECTING' || status === 'ERROR') && (
             <div className="space-y-4">
               <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl text-sm font-mono border border-slate-700/30 space-y-3">
                 <div className="flex items-center gap-3">
                   <Wifi className="h-5 w-5 text-blue-400"/>
-                  <span className="text-slate-400">Printer Details</span>
+                  <span className="text-slate-400">Kiosk Details</span>
                 </div>
                 <div className="pl-8 space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">IP</span> 
-                    <span className="text-white font-medium">{config?.ip}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Port</span> 
-                    <span className="text-white font-medium">{config?.port}</span>
+                    <span className="text-slate-500">Kiosk ID</span> 
+                    <span className="text-white font-medium">{config?.kiosk_id}</span>
                   </div>
                 </div>
               </div>
@@ -293,7 +333,7 @@ function App() {
               {status === 'ERROR' && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                   <AlertCircle className="inline mr-2 h-4 w-4"/>
-                  Connection failed. Check printer and retry.
+                  Kiosk offline or not found
                 </div>
               )}
               
@@ -303,7 +343,7 @@ function App() {
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg font-semibold py-6"
               >
                 {status === 'CONNECTING' ? (
-                  <><Loader2 className="animate-spin mr-2 h-5 w-5"/> Connecting...</>
+                  <><Loader2 className="animate-spin mr-2 h-5 w-5"/> Checking...</>
                 ) : (
                   <><Zap className="mr-2 h-5 w-5"/> Connect</>
                 )}
@@ -350,7 +390,7 @@ function App() {
               {status === 'CALCULATING' && (
                 <div className="flex items-center justify-center gap-3 text-blue-400 bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
                   <Loader2 className="animate-spin h-5 w-5"/>
-                  <span className="text-sm font-medium">Analyzing...</span>
+                  <span className="text-sm font-medium">Creating job...</span>
                 </div>
               )}
             </div>
@@ -362,8 +402,8 @@ function App() {
               <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-700/30 rounded-xl p-5 shadow-lg">
                 <div className="space-y-3">
                   <div className="flex justify-between items-center pb-3 border-b border-slate-700/30">
-                    <span className="text-slate-400 text-sm">Document</span>
-                    <span className="text-white text-sm font-medium truncate max-w-[180px]">{file.name}</span>
+                    <span className="text-slate-400 text-sm">Job ID</span>
+                    <span className="text-white text-xs font-mono">{pricing.job_id.slice(0, 16)}...</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400 text-sm">Pages</span>
@@ -409,8 +449,8 @@ function App() {
                 </div>
               </div>
               <div>
-                <p className="text-xl font-semibold mb-2">Sending to Printer</p>
-                <p className="text-sm text-slate-400">Please wait...</p>
+                <p className="text-xl font-semibold mb-2">Printing...</p>
+                <p className="text-sm text-slate-400">Checking status</p>
               </div>
             </div>
           )}
@@ -426,7 +466,7 @@ function App() {
               </div>
               <div>
                 <p className="text-2xl font-bold mb-2 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
-                  Print Job Sent!
+                  Print Complete!
                 </p>
                 <p className="text-sm text-slate-400">Collect your document</p>
               </div>
@@ -439,7 +479,7 @@ function App() {
             </div>
           )}
           
-          {/* Optimized Logs - limit to 10 entries */}
+          {/* Logs */}
           <div className="bg-black/50 backdrop-blur-sm text-emerald-400 text-[10px] font-mono p-4 rounded-xl h-24 overflow-y-auto border border-slate-800/50 shadow-inner">
             {logs.length === 0 ? (
               <div className="text-slate-600">// System ready...</div>
