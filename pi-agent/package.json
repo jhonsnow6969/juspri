@@ -1,0 +1,22 @@
+{
+    "name": "directprint-pi-agent",
+    "version": "1.0.0",
+    "description": "Print agent for Raspberry Pi or any CUPS-enabled system",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js",
+      "dev": "nodemon index.js",
+      "setup": "npm install && node setup-wizard.js"
+    },
+    "dependencies": {
+      "socket.io-client": "^4.7.2",
+      "pdf-lib": "^1.17.1"
+    },
+    "devDependencies": {
+      "nodemon": "^3.0.1"
+    },
+    "engines": {
+      "node": ">=16.0.0"
+    }
+  }
+  

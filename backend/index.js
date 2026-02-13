@@ -1,78 +1,149 @@
 const express = require('express');
-const net = require('net');
+const http = require('http');
+const { Server } = require("socket.io");
 const cors = require('cors');
-const fs = require('fs');
 const multer = require('multer');
-const path = require('path');
+const fs = require('fs');
+const { PDFDocument } = require('pdf-lib');
+
 const app = express();
+const server = http.createServer(app);
+// Enable CORS for Vercel
+const io = new Server(server, { cors: { origin: "*" } }); 
+
+app.use(cors({ origin: '*' }));
+app.use(express.json());
 const upload = multer({ dest: 'uploads/' });
 
+// Track connected Printers (Spokes)
+let printerSocket = null;
+let printerInfo = { connected: false, hostname: null, lastSeen: null };
 
-app.use(cors({
-    origin: '*', // Allow Vercel to access this
-    methods: ['GET', 'POST'] 
-}));
-app.use(express.json());
+io.on('connection', (socket) => {
+    console.log('[Cloud] New Client Connected:', socket.id);
+    
+    // The Pi sends this event to identify itself
+    socket.on('register_printer', (data) => {
+        console.log('[Cloud] Printer Registered:', data.hostname);
+        printerSocket = socket;
+        printerInfo = {
+            connected: true,
+            hostname: data.hostname,
+            lastSeen: new Date(),
+            socketId: socket.id
+        };
+    });
 
-// --- UPDATED ENDPOINT: Connect / Ping Printer ---
+    socket.on('print_status', (data) => {
+        console.log('[Cloud] Print Status:', data);
+        // Forward status to frontend if needed
+        io.emit('print_update', data);
+    });
+
+    socket.on('pong', (data) => {
+        printerInfo.lastSeen = new Date();
+        printerInfo.uptime = data.uptime;
+    });
+
+    socket.on('disconnect', () => {
+        console.log('[Cloud] Printer Disconnected');
+        if (printerSocket === socket) {
+            printerSocket = null;
+            printerInfo.connected = false;
+        }
+    });
+});
+
+// Health check endpoint
+app.get('/api/status', (req, res) => {
+    res.json({
+        server: 'online',
+        printer: printerInfo
+    });
+});
+
 app.post('/api/connect', (req, res) => {
-    // 1. GET THE REAL IP FROM FRONTEND
-    const { ip, port } = req.body; 
-    
-    // Safety check
-    if (!ip) return res.status(400).json({ status: 'error', message: 'No IP provided' });
-
-    console.log(`[Bridge] Connecting to REAL PRINTER at ${ip}:${port || 9100}...`);
-    
-    const socket = new net.Socket();
-    socket.setTimeout(4000); // 4 second real network timeout
-    
-    // 2. CONNECT TO THE REAL PRINTER
-    socket.connect(port || 9100, ip, () => {
-        socket.destroy(); // Connection established! We just wanted to ping it.
-        res.json({ status: 'connected', message: 'Printer is Online' });
-    });
-
-    socket.on('error', (err) => {
-        console.error("Connection Failed:", err.message);
-        res.status(500).json({ status: 'error', message: 'Unreachable' });
-    });
-
-    socket.on('timeout', () => {
-        socket.destroy();
-        res.status(408).json({ status: 'timeout', message: 'Printer unreachable (Check IP/Power)' });
-    });
+    if (printerSocket && printerInfo.connected) {
+        res.json({ 
+            status: 'connected', 
+            message: 'Printer is Online via Cloud',
+            printer: printerInfo.hostname
+        });
+    } else {
+        res.status(503).json({ status: 'error', message: 'Printer Agent Offline' });
+    }
 });
 
-// --- EXISTING ENDPOINT: Print Raw Bytes ---
+// NEW: Page counting endpoint
+app.post('/api/count-pages', upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
+        const dataBuffer = fs.readFileSync(req.file.path);
+        const pdfDoc = await PDFDocument.load(dataBuffer);
+        const pageCount = pdfDoc.getPageCount();
+        
+        // Cleanup
+        fs.unlinkSync(req.file.path);
+        
+        // Price calculation (₹3 per page)
+        const pricePerPage = 3;
+        const totalPrice = pageCount * pricePerPage;
+        
+        res.json({ 
+            pages: pageCount,
+            pricePerPage: pricePerPage,
+            totalPrice: totalPrice,
+            currency: 'INR'
+        });
+    } catch (error) {
+        console.error('Page count error:', error);
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ error: 'Failed to process PDF' });
+    }
+});
+
 app.post('/api/print', upload.single('file'), (req, res) => {
-    if (!req.file) return res.status(400).send('No file.');
+    if (!printerSocket || !req.file) {
+        return res.status(500).json({ 
+            error: 'Printer offline or no file',
+            printerConnected: !!printerSocket
+        });
+    }
+
+    console.log("[Cloud] Reading file to stream to Agent...");
     
-    const printerIP = req.body.printerIP || '127.0.0.1';
-    const printerPort = req.body.port || 9100;
-    const filePath = path.join(__dirname, req.file.path);
-    
-    console.log(`[Bridge] Streaming ${req.file.originalname} to ${printerIP}:${printerPort}...`);
+    // Read file to buffer
+    fs.readFile(req.file.path, (err, data) => {
+        if (err) {
+            console.error('File read error:', err);
+            return res.status(500).json({ error: 'Read Error' });
+        }
+        
+        // EMIT THE FILE TO THE PI
+        printerSocket.emit('print_job', { 
+            filename: req.file.originalname, 
+            fileBuffer: data 
+        });
 
-    const client = new net.Socket();
-    const fileStream = fs.createReadStream(filePath);
-
-    client.connect(printerPort, printerIP, () => {
-        fileStream.pipe(client);
-    });
-
-    client.on('close', () => {
-        fs.unlinkSync(filePath); // Cleanup
-        res.json({ status: 'completed' });
-    });
-
-    client.on('error', (err) => {
-        console.error(err);
-        res.status(500).json({ status: 'failed', error: err.message });
+        // Cleanup cloud storage
+        fs.unlinkSync(req.file.path);
+        
+        res.json({ 
+            status: 'completed', 
+            message: 'Sent to Printer Agent',
+            printer: printerInfo.hostname
+        });
     });
 });
 
-const PORT = 3001;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Backend Bridge running at http://localhost:${PORT}`);
-});
+// Periodic ping to printer
+setInterval(() => {
+    if (printerSocket) {
+        printerSocket.emit('ping');
+    }
+}, 15000);
+
+server.listen(3001, '0.0.0.0', () => console.log('Cloud Hub Running on 3001'));
