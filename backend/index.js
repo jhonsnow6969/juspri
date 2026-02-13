@@ -13,10 +13,10 @@ const server = http.createServer(app);
 
 // ==================== FIXED CORS CONFIGURATION ====================
 const allowedOrigins = [
+  'https://qr-wifi-printer.vercel.app',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
-  'https://qr-wifi-printer.vercel.app',
   'https://justpri.duckdns.org',
   // Add your other domains here
 ];
