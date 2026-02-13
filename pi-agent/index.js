@@ -6,7 +6,7 @@ const path = require('path');
 const PDFDocument = require('pdf-lib').PDFDocument;
 
 // ==================== CONFIG ====================
-const CLOUD_SERVER = process.env.CLOUD_URL || 'http://localhost:3001';
+const CLOUD_SERVER = process.env.CLOUD_URL || 'https://justpri.duckdns.org';
 const PRINTER_NAME = process.env.PRINTER_NAME || 'auto';
 const KIOSK_ID = process.env.KIOSK_ID || `kiosk_${require('os').hostname()}`;
 const TEMP_DIR = './print-queue';
