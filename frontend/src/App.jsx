@@ -292,6 +292,15 @@ function MainApp() {
     setCameraError(null);
   }, []);
 
+  // Add this NEW function right after resetFlow (around line 249)
+  const printAnotherOnSameKiosk = useCallback(() => {
+    // Keep the config (kiosk connection), just reset the job
+    setStatus('CONNECTED');
+    setFile(null);
+    setPricing(null);
+    addLog('Ready for next document');
+  }, [addLog]);
+
   const handleLogout = async () => {
     if (confirm('Are you sure you want to log out?')) {
       await signOut();
@@ -634,15 +643,27 @@ function MainApp() {
                   </p>
                   <p className="text-sm text-slate-400">Collect your document</p>
                 </div>
-                <Button 
-                  onClick={resetFlow} 
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-6"
-                >
-                  Print Another
-                </Button>
+    
+                {/* NEW: Two options instead of one */}
+                <div className="space-y-3">
+                  <Button 
+                    onClick={printAnotherOnSameKiosk} 
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-6"
+                  >
+                    <Printer className="mr-2 h-5 w-5"/>
+                    Print Another Document
+                  </Button>
+      
+                  <Button 
+                    onClick={resetFlow} 
+                    variant="ghost"
+                    className="w-full text-slate-400 hover:text-slate-300 hover:bg-slate-800/50"
+                  >
+                    ← Exit to Scanner
+                  </Button>
+                </div>
               </div>
             )}
-            
             {/* Logs */}
             <div className="bg-black/50 backdrop-blur-sm text-emerald-400 text-[10px] font-mono p-4 rounded-xl h-24 overflow-y-auto border border-slate-800/50 shadow-inner">
               {logs.length === 0 ? (

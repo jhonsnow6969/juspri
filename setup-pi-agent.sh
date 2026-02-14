@@ -180,15 +180,15 @@ install_nodejs() {
     
     if [ "$PKG_MANAGER" = "pacman" ]; then
         # Arch Linux
-        $INSTALL_CMD nodejs npm
+        $INSTALL_CMD nodejs npm git
     elif [ "$PKG_MANAGER" = "apt" ]; then
         # Ubuntu/Debian/Raspberry Pi OS
         curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-        $INSTALL_CMD nodejs
+        $INSTALL_CMD nodejs git
     elif [ "$PKG_MANAGER" = "dnf" ] || [ "$PKG_MANAGER" = "yum" ]; then
         # Fedora/RHEL
         curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-        $INSTALL_CMD nodejs
+        $INSTALL_CMD nodejs git
     fi
     
     # Verify installation
@@ -199,7 +199,6 @@ install_nodejs() {
         exit 1
     fi
 }
-
 # Install CUPS
 install_cups() {
     print_section "Installing CUPS (Printing System)"
@@ -214,8 +213,11 @@ install_cups() {
     
     if [ "$PKG_MANAGER" = "pacman" ]; then
         $INSTALL_CMD cups cups-pdf
+    elif [ "$PKG_MANAGER" = "apt" ]; then
+        $INSTALL_CMD cups cups-client
     else
-        $INSTALL_CMD cups cups-client cups-bsd
+        # DNF / YUM
+        $INSTALL_CMD cups cups-client
     fi
     
     # Start CUPS service
@@ -223,9 +225,9 @@ install_cups() {
     sudo systemctl start cups
     sudo systemctl enable cups
     
-    # Add user to lpadmin group
+    # Add user to lpadmin group (Note: some distros use 'sys' or 'wheel', but lpadmin is standard)
     print_step "Adding user to lpadmin group..."
-    sudo usermod -a -G lpadmin $USER
+    sudo usermod -a -G lpadmin $USER || print_warning "Could not add to lpadmin group. You may need to do this manually."
     
     print_success "CUPS installed and running"
 }
@@ -244,8 +246,11 @@ install_libreoffice() {
     
     if [ "$PKG_MANAGER" = "pacman" ]; then
         $INSTALL_CMD libreoffice-fresh
+    elif [ "$PKG_MANAGER" = "apt" ]; then
+        $INSTALL_CMD libreoffice-writer --no-install-recommends
     else
-        $INSTALL_CMD libreoffice-writer libreoffice-core-nogui
+        # DNF / YUM don't accept apt flags
+        $INSTALL_CMD libreoffice-writer
     fi
     
     # Verify installation
@@ -261,15 +266,19 @@ install_libreoffice() {
 install_imagemagick() {
     print_section "Installing ImageMagick (Image Conversion)"
     
-    if command -v convert &> /dev/null; then
+    if command -v convert &> /dev/null || command -v magick &> /dev/null; then
         print_info "ImageMagick already installed"
-        print_success "ImageMagick version: $(convert --version | head -n1)"
         return 0
     fi
     
     print_step "Installing ImageMagick..."
     
-    $INSTALL_CMD imagemagick
+    if [ "$PKG_MANAGER" = "pacman" ] || [ "$PKG_MANAGER" = "apt" ]; then
+        $INSTALL_CMD imagemagick
+    else
+        # Fedora/RHEL requires exact casing
+        $INSTALL_CMD ImageMagick
+    fi
     
     # Configure PDF policy
     print_step "Configuring ImageMagick PDF policy..."
@@ -288,14 +297,6 @@ install_imagemagick() {
         print_success "PDF policy configured"
     else
         print_warning "Could not find ImageMagick policy file"
-    fi
-    
-    # Verify installation
-    if command -v convert &> /dev/null; then
-        print_success "ImageMagick installed"
-    else
-        print_error "ImageMagick installation failed"
-        exit 1
     fi
 }
 
