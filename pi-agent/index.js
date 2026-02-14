@@ -129,13 +129,36 @@ async function convertImageToPDF(inputPath) {
     
     console.log(`   🔄 Converting image to PDF...`);
     
-    // Convert image to PDF, fit to A4 page
-    const cmd = `convert "${inputPath}" -page A4 -gravity center "${outputPath}"`;
+    // ImageMagick v7 uses "magick" instead of "convert"
+    // Try "magick" first, fall back to "convert" for older versions
+    const cmd = `magick "${inputPath}" -page A4 -gravity center "${outputPath}"`;
+    
+    console.log(`   Running: ${cmd}`); // Debug logging
     
     exec(cmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
       if (error) {
-        console.error(`   ✗ Conversion failed: ${stderr}`);
-        reject(new Error(`ImageMagick conversion failed: ${stderr || error.message}`));
+        // If "magick" command not found, try legacy "convert" command
+        if (stderr.includes('command not found') || stderr.includes('not recognized')) {
+          console.log(`   Trying legacy 'convert' command...`);
+          const legacyCmd = `convert "${inputPath}" -page A4 -gravity center "${outputPath}"`;
+          
+          exec(legacyCmd, { timeout: CONVERSION_TIMEOUT }, (error2, stdout2, stderr2) => {
+            if (error2) {
+              console.error(`   ✗ Conversion failed: ${stderr2}`);
+              reject(new Error(`ImageMagick conversion failed: ${stderr2 || error2.message}`));
+            } else {
+              if (fs.existsSync(outputPath)) {
+                console.log(`   ✓ Converted to PDF`);
+                resolve(outputPath);
+              } else {
+                reject(new Error('PDF output file not created'));
+              }
+            }
+          });
+        } else {
+          console.error(`   ✗ Conversion failed: ${stderr}`);
+          reject(new Error(`ImageMagick conversion failed: ${stderr || error.message}`));
+        }
       } else {
         if (fs.existsSync(outputPath)) {
           console.log(`   ✓ Converted to PDF`);

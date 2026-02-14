@@ -9,9 +9,7 @@ export function Login() {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
-
-    // Redirect to the page user was trying to access, or home
-    const from = location.state?.from?.pathname || '/';
+    const from = (location.state?.from?.pathname || '') + (location.state?.from?.search || '') || '/';
 
     const handleGoogleSignIn = async () => {
         try {
