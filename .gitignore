@@ -10,6 +10,3 @@ node_modules/
 
 # Backend Secrets
 backend/config/firebase-service-account.json
-
-# Frontend Secrets
-frontend/src/firebase.js
