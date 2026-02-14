@@ -4,19 +4,23 @@
     "description": "Print agent for Raspberry Pi or any CUPS-enabled system",
     "main": "index.js",
     "scripts": {
-      "start": "node index.js",
-      "dev": "nodemon index.js",
-      "setup": "npm install && node setup-wizard.js"
+        "start": "node index.js",
+        "dev": "nodemon index.js",
+        "setup": "npm install && node setup-wizard.js"
     },
     "dependencies": {
-      "socket.io-client": "^4.7.2",
-      "pdf-lib": "^1.17.1"
+        "axios": "^1.13.5",
+        "dotenv": "^17.3.1",
+        "express": "^5.2.1",
+        "pdf-lib": "^1.17.1",
+        "qrcode": "^1.5.4",
+        "qrcode-terminal": "^0.12.0",
+        "socket.io-client": "^4.7.2"
     },
     "devDependencies": {
-      "nodemon": "^3.0.1"
+        "nodemon": "^3.0.1"
     },
     "engines": {
-      "node": ">=16.0.0"
+        "node": ">=16.0.0"
     }
-  }
-  
+}

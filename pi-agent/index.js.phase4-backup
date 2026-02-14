@@ -1,4 +1,4 @@
-// pi-agent/index.js - V5 with Document Conversion
+// pi-agent/index.js - V4 with Pull-Based Polling
 require('dotenv').config();
 const io = require('socket.io-client');
 const axios = require('axios');
@@ -15,23 +15,19 @@ const KIOSK_ID = process.env.KIOSK_ID || `kiosk_${require('os').hostname()}`;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://qr-wifi-printer.vercel.app';
 const TEMP_DIR = './print-queue';
 const HEARTBEAT_INTERVAL = 30000;
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL) || 5000;
-const CONVERSION_TIMEOUT = 60000; // 60 seconds for conversion
+const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL) || 5000; // 5 seconds
 
 // ==================== SETUP ====================
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
 console.log(`
 ╔════════════════════════════════════════╗
-║   DirectPrint Agent V5 Starting...     ║
-║   Model: Pull-Based + Conversion       ║
+║   DirectPrint Agent V4 Starting...     ║
+║   Model: Pull-Based Polling            ║
 ║   Kiosk ID: ${KIOSK_ID.padEnd(26)}║
 ║   Cloud: ${CLOUD_SERVER.padEnd(30)}║
 ╚════════════════════════════════════════╝
 `);
-
-// Check conversion tools on startup
-checkConversionTools();
 
 // ==================== GENERATE QR CODE ====================
 const qrUrl = `${FRONTEND_URL}?kiosk_id=${KIOSK_ID}`;
@@ -40,7 +36,7 @@ console.log('\n📱 Scan this QR code to connect:\n');
 qrcode.generate(qrUrl, { small: false });
 console.log(`\n🔗 Or visit: ${qrUrl}\n`);
 
-// ==================== SOCKET CONNECTION ====================
+// ==================== SOCKET CONNECTION (for status updates only) ====================
 const socket = io(CLOUD_SERVER, {
   reconnection: true,
   reconnectionDelay: 1000,
@@ -54,99 +50,7 @@ const pendingJobs = new Map();
 let isPolling = false;
 let pollCount = 0;
 let jobsFetchedToday = 0;
-let conversionsToday = 0;
 let lastPollTime = null;
-
-// ==================== CONVERSION TOOLS CHECK ====================
-function checkConversionTools() {
-  console.log('🔧 Checking conversion tools...\n');
-  
-  // Check LibreOffice
-  exec('libreoffice --version', (error, stdout) => {
-    if (error) {
-      console.warn('⚠ LibreOffice not found - document conversion disabled');
-      console.warn('   Install: sudo apt install libreoffice-writer libreoffice-core-nogui');
-    } else {
-      console.log(`✓ LibreOffice: ${stdout.trim()}`);
-    }
-  });
-  
-  // Check ImageMagick
-  exec('convert --version', (error, stdout) => {
-    if (error) {
-      console.warn('⚠ ImageMagick not found - image conversion disabled');
-      console.warn('   Install: sudo apt install imagemagick');
-    } else {
-      const version = stdout.split('\n')[0];
-      console.log(`✓ ImageMagick: ${version}`);
-    }
-  });
-  
-  console.log('');
-}
-
-// ==================== FILE TYPE DETECTION ====================
-function getFileType(filename) {
-  const ext = path.extname(filename).toLowerCase();
-  
-  if (ext === '.pdf') return 'pdf';
-  if (['.doc', '.docx', '.rtf', '.odt', '.txt', '.md'].includes(ext)) return 'document';
-  if (['.png', '.jpg', '.jpeg'].includes(ext)) return 'image';
-  
-  return 'unknown';
-}
-
-// ==================== DOCUMENT CONVERSION ====================
-async function convertDocumentToPDF(inputPath) {
-  return new Promise((resolve, reject) => {
-    const outputDir = path.dirname(inputPath);
-    const baseName = path.basename(inputPath, path.extname(inputPath));
-    const outputPath = path.join(outputDir, `${baseName}.pdf`);
-    
-    console.log(`   🔄 Converting document to PDF...`);
-    
-    const cmd = `libreoffice --headless --convert-to pdf --outdir "${outputDir}" "${inputPath}"`;
-    
-    exec(cmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`   ✗ Conversion failed: ${stderr}`);
-        reject(new Error(`LibreOffice conversion failed: ${stderr || error.message}`));
-      } else {
-        if (fs.existsSync(outputPath)) {
-          console.log(`   ✓ Converted to PDF`);
-          resolve(outputPath);
-        } else {
-          reject(new Error('PDF output file not created'));
-        }
-      }
-    });
-  });
-}
-
-async function convertImageToPDF(inputPath) {
-  return new Promise((resolve, reject) => {
-    const outputPath = inputPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf');
-    
-    console.log(`   🔄 Converting image to PDF...`);
-    
-    // Convert image to PDF, fit to A4 page
-    const cmd = `convert "${inputPath}" -page A4 -gravity center "${outputPath}"`;
-    
-    exec(cmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`   ✗ Conversion failed: ${stderr}`);
-        reject(new Error(`ImageMagick conversion failed: ${stderr || error.message}`));
-      } else {
-        if (fs.existsSync(outputPath)) {
-          console.log(`   ✓ Converted to PDF`);
-          resolve(outputPath);
-        } else {
-          reject(new Error('PDF output file not created'));
-        }
-      }
-    });
-  });
-}
 
 // ==================== PRINTER DETECTION ====================
 async function detectPrinter() {
@@ -198,10 +102,13 @@ async function countPDFPages(filePath) {
 
 // ==================== POLLING FOR JOBS ====================
 async function pollForJobs() {
-  if (isPolling) return;
+  // Prevent concurrent polling
+  if (isPolling) {
+    return;
+  }
   
   if (!socket.connected) {
-    if (pollCount % 12 === 0) {
+    if (pollCount % 12 === 0) { // Log every minute
       console.log('⚠ Not connected to cloud, skipping poll');
     }
     pollCount++;
@@ -224,7 +131,8 @@ async function pollForJobs() {
         jobsFetchedToday++;
       }
     } else {
-      if (pollCount % 60 === 0) {
+      // Only log occasionally to avoid spam
+      if (pollCount % 60 === 0) { // Every 5 minutes
         console.log(`[Poll] No jobs available (checked ${pollCount} times)`);
       }
     }
@@ -258,40 +166,13 @@ async function handlePolledJob(job) {
   const tempFile = path.join(TEMP_DIR, `${job_id}_${filename}`);
   
   try {
-    // Decode and save file
+    // Decode base64 file data
     const fileBuffer = Buffer.from(file_data, 'base64');
     fs.writeFileSync(tempFile, fileBuffer);
     console.log('   ✓ File saved locally');
     
-    // Detect file type
-    const fileType = getFileType(filename);
-    console.log(`   📋 File type: ${fileType}`);
-    
-    let pdfPath = tempFile;
-    
-    // Convert to PDF if needed
-    if (fileType === 'document') {
-      try {
-        pdfPath = await convertDocumentToPDF(tempFile);
-        conversionsToday++;
-      } catch (convError) {
-        throw new Error(`Document conversion failed: ${convError.message}`);
-      }
-    } else if (fileType === 'image') {
-      try {
-        pdfPath = await convertImageToPDF(tempFile);
-        conversionsToday++;
-      } catch (convError) {
-        throw new Error(`Image conversion failed: ${convError.message}`);
-      }
-    } else if (fileType === 'pdf') {
-      console.log('   ✓ PDF file, no conversion needed');
-    } else {
-      throw new Error(`Unsupported file type: ${path.extname(filename)}`);
-    }
-    
-    // Verify and count pages
-    const actualPages = await countPDFPages(pdfPath);
+    // Verify pages
+    const actualPages = await countPDFPages(tempFile);
     console.log(`   ✓ Verified: ${actualPages} pages`);
     
     // Add to local queue
@@ -299,10 +180,8 @@ async function handlePolledJob(job) {
       job_id,
       filename,
       pages: actualPages,
-      filePath: pdfPath,
-      originalPath: tempFile,
-      receivedAt: new Date(),
-      converted: pdfPath !== tempFile
+      filePath: tempFile,
+      receivedAt: new Date()
     });
     
     // Execute immediately if not printing
@@ -315,6 +194,7 @@ async function handlePolledJob(job) {
   } catch (e) {
     console.error('✗ Job processing error:', e);
     
+    // Report failure to server
     if (socket.connected) {
       socket.emit('print_complete', { 
         job_id,
@@ -337,25 +217,25 @@ async function executePrint(job_id) {
     return;
   }
   
-  const { filename, filePath, pages, originalPath, converted } = pending;
+  const { filename, filePath, pages } = pending;
   
   console.log(`\n🖨️  Printing Job ${job_id}`);
   console.log(`   File: ${filename}`);
-  if (converted) {
-    console.log(`   ✓ Converted to PDF`);
-  }
   
   currentJob = job_id;
   
+  // Notify server: printing started
   if (socket.connected) {
     socket.emit('print_started', { job_id });
   }
   
   try {
+    // Detect printer if not already done
     if (!printerName) {
       printerName = await detectPrinter();
     }
     
+    // Send to CUPS
     const printCommand = `lp -d ${printerName} "${filePath}"`;
     
     exec(printCommand, (error, stdout, stderr) => {
@@ -389,12 +269,10 @@ async function executePrint(job_id) {
       pendingJobs.delete(job_id);
       
       setTimeout(() => {
-        // Delete both original and converted files
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        if (originalPath && originalPath !== filePath && fs.existsSync(originalPath)) {
-          fs.unlinkSync(originalPath);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`   🗑️  Cleaned up temp file`);
         }
-        console.log(`   🗑️  Cleaned up temp files`);
       }, 5000);
       
       // Check if more jobs are waiting
@@ -421,16 +299,18 @@ async function executePrint(job_id) {
   }
 }
 
-// ==================== SOCKET EVENTS ====================
+// ==================== SOCKET EVENTS (for status updates only) ====================
 socket.on('connect', async () => {
   console.log('✓ Connected to Cloud Hub!');
   
+  // Detect printer on startup
   try {
     printerName = await detectPrinter();
   } catch (e) {
     console.warn('⚠ Could not detect printer:', e);
   }
   
+  // Register with server
   socket.emit('register', { 
     kiosk_id: KIOSK_ID,
     hostname: require('os').hostname(),
@@ -457,8 +337,7 @@ socket.on('ping', () => {
     current_job: currentJob,
     pending_count: pendingJobs.size,
     poll_count: pollCount,
-    jobs_fetched_today: jobsFetchedToday,
-    conversions_today: conversionsToday
+    jobs_fetched_today: jobsFetchedToday
   });
 });
 
@@ -470,6 +349,7 @@ socket.on('update_config', (data) => {
 setInterval(pollForJobs, POLL_INTERVAL);
 console.log(`📡 Connecting to cloud...`);
 
+// Initial poll after 2 seconds (after connection established)
 setTimeout(() => {
   console.log('🔄 Starting job polling...');
   pollForJobs();
@@ -487,7 +367,6 @@ setInterval(() => {
       memory: process.memoryUsage().heapUsed / 1024 / 1024,
       poll_count: pollCount,
       jobs_fetched_today: jobsFetchedToday,
-      conversions_today: conversionsToday,
       last_poll: lastPollTime
     });
   }
@@ -496,7 +375,7 @@ setInterval(() => {
 // Status log
 setInterval(() => {
   if (socket.connected) {
-    console.log(`💚 Agent alive | Uptime: ${Math.floor(process.uptime())}s | Polls: ${pollCount} | Fetched: ${jobsFetchedToday} | Conversions: ${conversionsToday} | Pending: ${pendingJobs.size}`);
+    console.log(`💚 Agent alive | Uptime: ${Math.floor(process.uptime())}s | Polls: ${pollCount} | Fetched: ${jobsFetchedToday} | Pending: ${pendingJobs.size}`);
   }
 }, 60000);
 
@@ -505,7 +384,6 @@ setInterval(() => {
   const now = new Date();
   if (now.getHours() === 0 && now.getMinutes() === 0) {
     jobsFetchedToday = 0;
-    conversionsToday = 0;
     pollCount = 0;
     console.log('📊 Daily counters reset');
   }
@@ -518,16 +396,12 @@ setInterval(() => {
   
   files.forEach(file => {
     const filePath = path.join(TEMP_DIR, file);
-    try {
-      const stats = fs.statSync(filePath);
-      const ageMinutes = (now - stats.mtimeMs) / 1000 / 60;
-      
-      if (ageMinutes > 30) {
-        fs.unlinkSync(filePath);
-        console.log(`🗑️  Cleaned up old file: ${file}`);
-      }
-    } catch (e) {
-      // File might have been deleted already
+    const stats = fs.statSync(filePath);
+    const ageMinutes = (now - stats.mtimeMs) / 1000 / 60;
+    
+    if (ageMinutes > 30) {
+      fs.unlinkSync(filePath);
+      console.log(`🗑️  Cleaned up old file: ${file}`);
     }
   });
 }, 300000);

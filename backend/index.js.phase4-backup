@@ -5,7 +5,6 @@ const http = require('http');
 const { Server } = require("socket.io");
 const cors = require('cors');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { PDFDocument } = require('pdf-lib');
@@ -61,45 +60,7 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
-
-// ==================== UPDATED MULTER CONFIG ====================
-// Allowed file types
-const ALLOWED_EXTENSIONS = [
-  '.pdf',
-  '.doc', '.docx',
-  '.txt', '.md',
-  '.rtf', '.odt',
-  '.png', '.jpg', '.jpeg'
-];
-
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/plain',
-  'text/markdown',
-  'application/rtf',
-  'application/vnd.oasis.opendocument.text',
-  'image/png',
-  'image/jpeg'
-];
-
-// Configure multer with file validation
-const upload = multer({ 
-  dest: 'uploads/',
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB max
-  },
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    
-    if (ALLOWED_EXTENSIONS.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`File type not allowed. Supported: ${ALLOWED_EXTENSIONS.join(', ')}`));
-    }
-  }
-});
+const upload = multer({ dest: 'uploads/' });
 
 // ==================== IN-MEMORY SOCKET TRACKING ====================
 const kioskSockets = new Map();
@@ -134,17 +95,6 @@ async function countPDFPages(filePath) {
         return 1;
     }
 }
-
-function getFileCategory(filename) {
-    const ext = path.extname(filename).toLowerCase();
-    
-    if (ext === '.pdf') return 'pdf';
-    if (['.doc', '.docx', '.rtf', '.odt', '.txt', '.md'].includes(ext)) return 'document';
-    if (['.png', '.jpg', '.jpeg'].includes(ext)) return 'image';
-    
-    return 'unknown';
-  }
-  
 
 // ==================== CLEANUP OLD JOBS ====================
 setInterval(async () => {
@@ -380,7 +330,6 @@ app.get('/api/jobs/poll', async (req, res) => {
 });
 
 // PROTECTED ROUTES
-
 app.post('/api/jobs/create', verifyToken, upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
@@ -396,31 +345,7 @@ app.post('/api/jobs/create', verifyToken, upload.single('file'), async (req, res
     try {
         await ensureUserExists(db, req.user);
         
-        const ext = path.extname(req.file.originalname).toLowerCase();
-        let pages = 1; // Default for non-PDF files
-        
-        // Only count pages for PDFs
-        if (ext === '.pdf') {
-            try {
-                pages = await countPDFPages(req.file.path);
-            } catch (e) {
-                console.warn('PDF page count failed, using estimate:', e.message);
-                pages = Math.ceil(req.file.size / (1024 * 100)); // Rough estimate
-            }
-        } else {
-            // Estimate pages for other formats
-            // Images: 1 page
-            // Documents: Estimate based on file size
-            if (['.png', '.jpg', '.jpeg'].includes(ext)) {
-                pages = 1;
-            } else {
-                // Rough estimate: 1 page per 5KB for text documents
-                pages = Math.max(1, Math.ceil(req.file.size / (1024 * 5)));
-            }
-            
-            console.log(`[Job] Non-PDF file: ${ext}, estimated ${pages} pages`);
-        }
-        
+        const pages = await countPDFPages(req.file.path);
         const kiosk = await db.getKiosk(kiosk_id);
         const pricePerPage = kiosk?.price_per_page || PRICE_PER_PAGE;
         const totalCost = pages * pricePerPage;
@@ -441,29 +366,21 @@ app.post('/api/jobs/create', verifyToken, upload.single('file'), async (req, res
             payment_status: 'pending'
         });
         
-        console.log(`[Job] Created ${jobId} - ${req.file.originalname} (${pages} pages, ₹${totalCost}) (user: ${req.user.email})`);
+        console.log(`[Job] Created ${jobId} - ${pages} pages, ₹${totalCost} (user: ${req.user.email})`);
         
         res.json({
             job_id: jobId,
-            filename: req.file.originalname,
-            file_type: ext,
             pages: pages,
             price_per_page: pricePerPage,
             total_cost: totalCost,
             currency: 'INR',
-            estimated_time_seconds: pages * 10,
-            note: ext !== '.pdf' ? 'File will be converted to PDF before printing' : null
+            estimated_time_seconds: pages * 10
         });
         
     } catch (error) {
         console.error('Job creation error:', error);
         if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        
-        if (error.message && error.message.includes('File type not allowed')) {
-            res.status(400).json({ error: error.message });
-        } else {
-            res.status(500).json({ error: 'Failed to process file' });
-        }
+        res.status(500).json({ error: 'Failed to process PDF' });
     }
 });
 
@@ -622,23 +539,6 @@ app.get('/api/admin/jobs', verifyToken, isAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to get jobs' });
     }
 });
-
-
-app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        error: 'File too large',
-        message: 'Maximum file size is 50MB' 
-      });
-    }
-    return res.status(400).json({ error: error.message });
-  } else if (error) {
-    return res.status(400).json({ error: error.message });
-  }
-  next();
-});
-
 
 // ==================== KIOSK HEALTH CHECK ====================
 setInterval(async () => {
