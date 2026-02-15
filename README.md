@@ -480,45 +480,6 @@ lpoptions -d printer_name
 ```
 
 **Full troubleshooting guide:** [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-**Contribution Guidelines:** [CONTRIBUTING.md](CONTRIBUTING.md)
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- Firebase for authentication
-- Vercel for frontend hosting
-- LibreOffice for document conversion
-- CUPS for printing system
-- shadcn/ui for beautiful components
-
----
-
-## 📞 Support
-
-- **Issues:** [GitHub Issues](https://github.com/revanthlol/qr-wifi-printer/issues)
-- **Email:** your-email@example.com
-- **Documentation:** [Wiki](https://github.com/revanthlol/qr-wifi-printer/wiki)
-
 ---
 
 ## 🗺️ Roadmap
@@ -534,7 +495,3 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - [ ] Mobile app (React Native)
 
 ---
-
-
-
-Want me to create any of the additional documentation files (API docs, troubleshooting guide, etc.)? 🚀
