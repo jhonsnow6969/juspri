@@ -71,14 +71,24 @@ function checkConversionTools() {
     }
   });
   
-  // Check ImageMagick
-  exec('convert --version', (error, stdout) => {
+  // Check libvips
+  exec('vips --version', (error, stdout) => {
     if (error) {
-      console.warn('⚠ ImageMagick not found - image conversion disabled');
-      console.warn('   Install: sudo apt install imagemagick');
+      console.warn('⚠ libvips not found - image processing disabled');
+      console.warn('   Install: sudo apt install libvips-tools');
     } else {
       const version = stdout.split('\n')[0];
-      console.log(`✓ ImageMagick: ${version}`);
+      console.log(`✓ libvips: ${version}`);
+    }
+  });
+  
+  // Check Ghostscript
+  exec('gs --version', (error, stdout) => {
+    if (error) {
+      console.warn('⚠ Ghostscript not found - PDF creation disabled');
+      console.warn('   Install: sudo apt install ghostscript');
+    } else {
+      console.log(`✓ Ghostscript: ${stdout.trim()}`);
     }
   });
   
@@ -123,50 +133,67 @@ async function convertDocumentToPDF(inputPath) {
   });
 }
 
+// ==================== IMAGE CONVERSION ====================
 async function convertImageToPDF(inputPath) {
   return new Promise((resolve, reject) => {
     const outputPath = inputPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf');
+    const tempProcessedImage = inputPath.replace(/\.(png|jpg|jpeg)$/i, '_processed.png');
     
     console.log(`   🔄 Converting image to PDF...`);
     
-    // ImageMagick v7 uses "magick" instead of "convert"
-    // Try "magick" first, fall back to "convert" for older versions
-    const cmd = `magick "${inputPath}" -page A4 -gravity center "${outputPath}"`;
+    // Step 1: Process image with libvips (resize to fit A4)
+    // A4 at 150 DPI = 1240x1754 pixels (good quality, reasonable size)
+    const vipsCmd = `vipsthumbnail "${inputPath}" -s 1240x1754 -o "${tempProcessedImage}"`;
     
-    console.log(`   Running: ${cmd}`); // Debug logging
+    console.log(`   Processing with libvips...`);
     
-    exec(cmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
+    exec(vipsCmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
       if (error) {
-        // If "magick" command not found, try legacy "convert" command
-        if (stderr.includes('command not found') || stderr.includes('not recognized')) {
-          console.log(`   Trying legacy 'convert' command...`);
-          const legacyCmd = `convert "${inputPath}" -page A4 -gravity center "${outputPath}"`;
-          
-          exec(legacyCmd, { timeout: CONVERSION_TIMEOUT }, (error2, stdout2, stderr2) => {
-            if (error2) {
-              console.error(`   ✗ Conversion failed: ${stderr2}`);
-              reject(new Error(`ImageMagick conversion failed: ${stderr2 || error2.message}`));
+        // Fallback: Try without thumbnail (direct copy)
+        console.log(`   Trying direct conversion...`);
+        
+        // Use Ghostscript directly on original image
+        const gsCmd = `gs -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dPDFFitPage -sPAPERSIZE=a4 -sOutputFile="${outputPath}" "${inputPath}"`;
+        
+        exec(gsCmd, { timeout: CONVERSION_TIMEOUT }, (error2, stdout2, stderr2) => {
+          if (error2) {
+            console.error(`   ✗ Conversion failed: ${stderr2}`);
+            reject(new Error(`Image conversion failed: ${stderr2 || error2.message}`));
+          } else {
+            if (fs.existsSync(outputPath)) {
+              console.log(`   ✓ Converted to PDF`);
+              resolve(outputPath);
             } else {
-              if (fs.existsSync(outputPath)) {
-                console.log(`   ✓ Converted to PDF`);
-                resolve(outputPath);
-              } else {
-                reject(new Error('PDF output file not created'));
-              }
+              reject(new Error('PDF output file not created'));
             }
-          });
-        } else {
-          console.error(`   ✗ Conversion failed: ${stderr}`);
-          reject(new Error(`ImageMagick conversion failed: ${stderr || error.message}`));
-        }
-      } else {
-        if (fs.existsSync(outputPath)) {
-          console.log(`   ✓ Converted to PDF`);
-          resolve(outputPath);
-        } else {
-          reject(new Error('PDF output file not created'));
-        }
+          }
+        });
+        return;
       }
+      
+      // Step 2: Convert processed image to PDF with Ghostscript
+      console.log(`   Creating PDF with Ghostscript...`);
+      
+      const gsCmd = `gs -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dPDFFitPage -sPAPERSIZE=a4 -sOutputFile="${outputPath}" "${tempProcessedImage}"`;
+      
+      exec(gsCmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
+        // Clean up temporary processed image
+        if (fs.existsSync(tempProcessedImage)) {
+          fs.unlinkSync(tempProcessedImage);
+        }
+        
+        if (error) {
+          console.error(`   ✗ PDF creation failed: ${stderr}`);
+          reject(new Error(`Ghostscript conversion failed: ${stderr || error.message}`));
+        } else {
+          if (fs.existsSync(outputPath)) {
+            console.log(`   ✓ Converted to PDF`);
+            resolve(outputPath);
+          } else {
+            reject(new Error('PDF output file not created'));
+          }
+        }
+      });
     });
   });
 }

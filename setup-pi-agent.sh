@@ -262,149 +262,86 @@ install_libreoffice() {
     fi
 }
 
-# Install ImageMagick
-install_imagemagick() {
-    print_section "Installing ImageMagick (Image Conversion)"
+# Install libvips and Ghostscript
+install_image_tools() {
+    print_section "Installing Image Processing Tools"
     
-    if command -v convert &> /dev/null || command -v magick &> /dev/null; then
-        print_info "ImageMagick already installed"
-        return 0
-    fi
-    
-    print_step "Installing ImageMagick..."
-    
-    if [ "$PKG_MANAGER" = "pacman" ] || [ "$PKG_MANAGER" = "apt" ]; then
-        $INSTALL_CMD imagemagick
+    # Check libvips
+    if command -v vips &> /dev/null; then
+        print_info "libvips already installed"
+        print_success "libvips version: $(vips --version | head -n1)"
     else
-        # Fedora/RHEL requires exact casing
-        $INSTALL_CMD ImageMagick
-    fi
-    
-    # Configure PDF policy
-    print_step "Configuring ImageMagick PDF policy..."
-    
-    # Find policy.xml location
-    POLICY_FILE=""
-    for path in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml /usr/lib/ImageMagick*/config-Q16/policy.xml; do
-        if [ -f "$path" ]; then
-            POLICY_FILE="$path"
-            break
+        print_step "Installing libvips..."
+        
+        if [ "$PKG_MANAGER" = "pacman" ]; then
+            $INSTALL_CMD libvips
+        elif [ "$PKG_MANAGER" = "apt" ]; then
+            $INSTALL_CMD libvips-tools libvips42
+        else
+            # Fedora/RHEL
+            $INSTALL_CMD vips-tools
         fi
-    done
+        
+        if command -v vips &> /dev/null; then
+            print_success "libvips installed"
+        else
+            print_error "libvips installation failed"
+            exit 1
+        fi
+    fi
     
-    if [ -n "$POLICY_FILE" ]; then
-        sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' "$POLICY_FILE" 2>/dev/null || true
-        print_success "PDF policy configured"
+    # Check Ghostscript
+    if command -v gs &> /dev/null; then
+        print_info "Ghostscript already installed"
+        print_success "Ghostscript version: $(gs --version)"
     else
-        print_warning "Could not find ImageMagick policy file"
+        print_step "Installing Ghostscript..."
+        
+        if [ "$PKG_MANAGER" = "pacman" ]; then
+            $INSTALL_CMD ghostscript
+        elif [ "$PKG_MANAGER" = "apt" ]; then
+            $INSTALL_CMD ghostscript
+        else
+            # Fedora/RHEL
+            $INSTALL_CMD ghostscript
+        fi
+        
+        if command -v gs &> /dev/null; then
+            print_success "Ghostscript installed"
+        else
+            print_error "Ghostscript installation failed"
+            exit 1
+        fi
     fi
 }
 
 # Setup Pi Agent
-# Setup Pi Agent
 setup_pi_agent() {
     print_section "Setting Up Pi Agent"
-    
+
     # Define installation directory
     INSTALL_DIR="$HOME/directprint-agent"
     
-    # Check if already installed
-    if [ -d "$INSTALL_DIR" ]; then
-        print_info "DirectPrint agent already installed at: $INSTALL_DIR"
-        echo ""
-        read -p "Update existing installation? (y/n): " -n 1 -r
-        echo
-        
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_step "Updating pi-agent code..."
-            
-            cd "$INSTALL_DIR"
-            
-            # Backup current .env
-            if [ -f ".env" ]; then
-                cp .env .env.backup
-                print_info "Backed up .env file"
-            fi
-            
-            # Pull latest code (sparse checkout)
-            git fetch origin
-            git reset --hard origin/main
-            
-            # Restore .env
-            if [ -f ".env.backup" ]; then
-                mv .env.backup .env
-                print_info "Restored .env file"
-            fi
-            
-            # Update dependencies
-            print_step "Updating dependencies..."
-            npm install
-            
-            print_success "Pi agent updated!"
-            PI_AGENT_DIR="$INSTALL_DIR"
-            return 0
-        else
-            print_info "Skipping update"
-            PI_AGENT_DIR="$INSTALL_DIR"
-            return 0
-        fi
-    fi
-    
-    # Fresh installation
-    print_step "Installing pi-agent (sparse checkout - only pi-agent folder)..."
-    
-    # Create install directory
-    mkdir -p "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-    
-    # Initialize git with sparse checkout
-    git init
-    git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
-    git config core.sparseCheckout true
-    
-    # Only checkout pi-agent folder
-    echo "pi-agent/*" > .git/info/sparse-checkout
-    
-    print_step "Downloading pi-agent files..."
-    git pull origin main
-    
-    # Move files from pi-agent subdirectory to root
-    if [ -d "pi-agent" ]; then
-        mv pi-agent/* .
-        mv pi-agent/.* . 2>/dev/null || true
-        rmdir pi-agent
-    fi
-    
-    print_success "Pi agent downloaded (sparse - only needed files)"
-    
-    # Install dependencies
-    print_step "Installing Node.js dependencies..."
-    npm install
-    
-    print_success "Dependencies installed"
-    
-    # Create .env file
-    if [ ! -f ".env" ]; then
+    # --- Helper function to generate .env ---
+    generate_env_file() {
         print_step "Creating .env configuration..."
-        
-        # Interactive configuration
         echo ""
         echo -e "${WHITE}Configuration:${NC}"
         echo ""
-        
+
         read -p "Backend URL [https://justpri.duckdns.org]: " CLOUD_URL
         CLOUD_URL=${CLOUD_URL:-https://justpri.duckdns.org}
-        
+
         read -p "Frontend URL [https://qr-wifi-printer.vercel.app]: " FRONTEND_URL
         FRONTEND_URL=${FRONTEND_URL:-https://qr-wifi-printer.vercel.app}
-        
-        read -p "Kiosk ID [kiosk_$(hostname)]: " KIOSK_ID
-        KIOSK_ID=${KIOSK_ID:-kiosk_$(hostname)}
-        
+
+        # Ask for a manual Kiosk ID, default to 'kiosk_1' if they just hit enter
+        read -p "Enter unique Kiosk ID [kiosk_1]: " KIOSK_ID
+        KIOSK_ID=${KIOSK_ID:-kiosk_1}
+
         read -p "Printer name (leave blank for auto-detect): " PRINTER_NAME
         PRINTER_NAME=${PRINTER_NAME:-auto}
-        
-        # Create .env file
+
         cat > .env << EOF
 # Cloud Backend
 CLOUD_URL=$CLOUD_URL
@@ -422,15 +359,111 @@ POLL_INTERVAL=5000
 # QR Server
 QR_SERVER_PORT=3000
 EOF
-        
+
         print_success "Configuration saved to .env"
+    }
+    # ----------------------------------------
+
+    # Check if already installed
+    if [ -d "$INSTALL_DIR" ]; then
+        print_info "DirectPrint agent already installed at: $INSTALL_DIR"
+        echo ""
+        read -p "Update existing installation? (y/n): " -n 1 -r
+        echo
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_step "Updating pi-agent code..."
+            cd "$INSTALL_DIR" || { print_error "Failed to cd into $INSTALL_DIR"; exit 1; }
+
+            # Backup current .env
+            if [ -f ".env" ]; then
+                cp .env .env.backup
+                print_info "Backed up .env file"
+            fi
+
+            # Pull latest code safely
+            if [ -d ".git" ]; then
+                git fetch origin
+                git reset --hard origin/main
+            else
+                # If .git missing, initialize and pull
+                git init
+                git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
+                git fetch origin
+                git reset --hard origin/main
+            fi
+
+            # Restore .env
+            if [ -f ".env.backup" ]; then
+                mv .env.backup .env
+                print_info "Restored .env file"
+            fi
+
+            # Update dependencies
+            print_step "Updating dependencies..."
+            npm install
+            print_success "Pi agent updated!"
+
+            # Ask about reconfiguration
+            echo ""
+            read -p "Reconfigure settings (.env file)? (y/n): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_step "Reconfiguring..."
+                rm -f .env
+                generate_env_file # <-- FIX: Call the prompt logic here!
+            fi
+
+            PI_AGENT_DIR="$INSTALL_DIR"
+            return 0
+        else
+            print_info "Skipping update, keeping existing installation."
+            PI_AGENT_DIR="$INSTALL_DIR"
+            return 0
+        fi
+    fi
+
+    # ----- Fresh installation flow -----
+    print_step "Installing pi-agent (sparse checkout - only pi-agent folder)..."
+
+    # Create install directory
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || { print_error "Failed to cd into $INSTALL_DIR"; exit 1; }
+
+    # Initialize git with sparse checkout
+    git init
+    git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
+    git config core.sparseCheckout true
+    echo "pi-agent/*" > .git/info/sparse-checkout
+
+    print_step "Downloading pi-agent files..."
+    git pull origin main
+
+    # Move files from pi-agent subdirectory to root
+    if [ -d "pi-agent" ]; then
+        mv pi-agent/* .
+        mv pi-agent/.* . 2>/dev/null || true
+        rmdir pi-agent
+    fi
+
+    print_success "Pi agent downloaded (sparse - only needed files)"
+
+    # Install dependencies
+    print_step "Installing Node.js dependencies..."
+    npm install
+    print_success "Dependencies installed"
+
+    # Create .env file
+    if [ ! -f ".env" ]; then
+        generate_env_file # <-- FIX: Call the prompt logic here for new installs!
     else
         print_info ".env file already exists, skipping"
     fi
-    
+
     PI_AGENT_DIR="$INSTALL_DIR"
     print_success "Pi Agent setup complete"
 }
+
 
 # Create systemd service
 create_systemd_service() {
@@ -495,7 +528,8 @@ create_qr_service() {
     print_section "QR Display Service (Optional)"
     
     echo "The QR display service runs a web server showing the QR code."
-    echo "You can access it at http://$(hostname -I | awk '{print $1}'):3000"
+    LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || echo "localhost")
+    echo "You can access it at http://${LOCAL_IP}:3000"
     echo ""
     read -p "Install QR display service? (y/n): " -n 1 -r
     echo
@@ -557,7 +591,8 @@ show_completion() {
     echo "     ${CYAN}sudo systemctl restart directprint-agent${NC}"
     echo ""
     echo "  4. ${ARROW} QR Code (if enabled):"
-    echo "     ${CYAN}http://$(hostname -I | awk '{print $1}'):3000${NC}"
+    LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+    echo "     ${CYAN}http://${LOCAL_IP}:3000${NC}"
     echo ""
     
     if [ "$PKG_MANAGER" = "apt" ]; then
@@ -585,7 +620,7 @@ main() {
     install_nodejs
     install_cups
     install_libreoffice
-    install_imagemagick
+    install_image_tools
     setup_pi_agent
     create_systemd_service
     create_qr_service
