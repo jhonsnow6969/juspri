@@ -7,7 +7,7 @@ import { getFileIcon, getFileExt } from './printUtils';
 
 // Replace with your actual import paths for Button and Scanner
 import { Button } from '@/components/ui/button'; 
-const Scanner = React.lazy(() => import('react-qr-scanner'));
+import ZXingScanner from './ZXingScanner'
 
 export function QRScannerView({ 
   scannerActive, 
@@ -26,14 +26,13 @@ export function QRScannerView({
           </div>
         }>
           {scannerActive && !cameraError ? (
-            <Scanner
-              onScan={handleScan}
-              onError={handleScanError}
-              styles={{
-                container: { aspectRatio: '1/1' },
-                video: { objectFit: 'cover' }
-              }}
-            />
+            <ZXingScanner
+            active={scannerActive && !cameraError}
+            onScan={handleScan}
+            onError={handleScanError}
+          />
+          
+          
           ) : (
             <div className="aspect-square bg-muted/10 flex flex-col items-center justify-center p-6 text-center">
               <QrCode className="h-16 w-16 text-muted-foreground mb-4"/>
