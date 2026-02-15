@@ -297,22 +297,34 @@ function PrintInterface() {
           {status === 'IDLE' && (
             <div className="space-y-4">
               <div className="relative rounded-2xl overflow-hidden border-2 border-slate-700/50 shadow-inner">
-                {scannerActive && (
-                  <Suspense fallback={
-                    <div className="aspect-square bg-slate-800/50 flex items-center justify-center">
-                      <Loader2 className="animate-spin h-8 w-8 text-blue-400"/>
-                    </div>
-                  }>
-                    <Scanner
-                      onScan={handleScan}
-                      onError={handleScanError}
-                      styles={{
-                        container: { aspectRatio: '1/1' },
-                        video: { objectFit: 'cover' }
-                      }}
-                    />
-                  </Suspense>
+              <Suspense fallback={
+                <div className="aspect-square bg-slate-800/50 flex items-center justify-center">
+                  <Loader2 className="animate-spin h-8 w-8 text-blue-400"/>
+                </div>
+              }>
+                {scannerActive && !cameraError ? (
+                  <Scanner
+                    onScan={handleScan}
+                    onError={handleScanError}
+                    styles={{
+                      container: { aspectRatio: '1/1' },
+                      video: { objectFit: 'cover' }
+                    }}
+                  />
+                ) : (
+                  <div className="aspect-square bg-slate-800/50 flex flex-col items-center justify-center p-6 text-center">
+                    <QrCode className="h-16 w-16 text-slate-600 mb-4"/>
+                    <p className="text-slate-400 text-sm mb-4">{cameraError || 'Camera not active'}</p>
+                    <Button 
+                      size="sm" 
+                      onClick={() => { setScannerActive(true); setCameraError(null); }}
+                      className="bg-blue-600 hover:bg-blue-500"
+                    >
+                      Enable Camera
+                    </Button>
+                  </div>
                 )}
+              </Suspense>
               </div>
               
               {cameraError && (
@@ -365,7 +377,7 @@ function PrintInterface() {
           )}
 
           {/* VIEW 2: Connect to Printer */}
-          {status === 'SCANNED' && (
+          {(status === 'SCANNED' || status === 'CONNECTING' || status === 'ERROR') && (
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
