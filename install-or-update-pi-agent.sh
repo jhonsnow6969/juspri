@@ -131,7 +131,7 @@ confirm_install() {
     echo "  1. Node.js (v18.x)"
     echo "  2. CUPS (printing system)"
     echo "  3. LibreOffice (document conversion)"
-    echo "  4. ImageMagick (image conversion)"
+    echo "  4. libvips (image conversion)"
     echo "  5. DirectPrint Pi Agent"
     echo "  6. System services (auto-start)"
     echo ""
@@ -329,17 +329,17 @@ setup_pi_agent() {
         echo -e "${WHITE}Configuration:${NC}"
         echo ""
 
-        read -p "Backend URL [https://justpri.duckdns.org]: " CLOUD_URL
+        read -p "Backend URL -(leave blank for default) [https://justpri.duckdns.org]: " CLOUD_URL
         CLOUD_URL=${CLOUD_URL:-https://justpri.duckdns.org}
 
-        read -p "Frontend URL [https://qr-wifi-printer.vercel.app]: " FRONTEND_URL
+        read -p "Frontend URL -(leave blank for default) [https://qr-wifi-printer.vercel.app]: " FRONTEND_URL
         FRONTEND_URL=${FRONTEND_URL:-https://qr-wifi-printer.vercel.app}
 
         # Ask for a manual Kiosk ID, default to 'kiosk_1' if they just hit enter
-        read -p "Enter unique Kiosk ID [kiosk_1]: " KIOSK_ID
+        read -p "Enter unique Kiosk ID -(leave blank for default) [kiosk_1]: " KIOSK_ID
         KIOSK_ID=${KIOSK_ID:-kiosk_1}
 
-        read -p "Printer name (leave blank for auto-detect): " PRINTER_NAME
+        read -p "Printer name -(leave blank for auto-detect): " PRINTER_NAME
         PRINTER_NAME=${PRINTER_NAME:-auto}
 
         cat > .env << EOF
@@ -364,7 +364,7 @@ EOF
     }
     # ----------------------------------------
 
-    # Check if already installed
+# Check if already installed
     if [ -d "$INSTALL_DIR" ]; then
         print_info "DirectPrint agent already installed at: $INSTALL_DIR"
         echo ""
@@ -381,17 +381,32 @@ EOF
                 print_info "Backed up .env file"
             fi
 
-            # Pull latest code safely
-            if [ -d ".git" ]; then
-                git fetch origin
-                git reset --hard origin/main
-            else
-                # If .git missing, initialize and pull
+            # --- Fixed Update Logic ---
+            if [ ! -d ".git" ]; then
                 git init
                 git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
-                git fetch origin
-                git reset --hard origin/main
             fi
+
+            # Ensure sparse checkout is configured for only the pi-agent folder
+            git config core.sparseCheckout true
+            echo "pi-agent/*" > .git/info/sparse-checkout
+
+            print_step "Fetching latest changes..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Flatten the directory: move files from pi-agent/ to root
+            if [ -d "pi-agent" ]; then
+                print_info "Syncing files from subfolder to root..."
+                cp -rn pi-agent/* . 2>/dev/null || true
+                cp -rn pi-agent/.* . 2>/dev/null || true
+                # We use cp -rn to avoid overwriting but since we reset --hard, 
+                # a simple mv is often cleaner:
+                mv -f pi-agent/* . 2>/dev/null || true
+                mv -f pi-agent/.* . 2>/dev/null || true
+                rmdir pi-agent 2>/dev/null || true
+            fi
+            # ---------------------------
 
             # Restore .env
             if [ -f ".env.backup" ]; then
@@ -411,7 +426,7 @@ EOF
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 print_step "Reconfiguring..."
                 rm -f .env
-                generate_env_file # <-- FIX: Call the prompt logic here!
+                generate_env_file
             fi
 
             PI_AGENT_DIR="$INSTALL_DIR"
@@ -590,7 +605,10 @@ show_completion() {
     echo "  3. ${ARROW} Restart service:"
     echo "     ${CYAN}sudo systemctl restart directprint-agent${NC}"
     echo ""
-    echo "  4. ${ARROW} QR Code (if enabled):"
+    echo "  4. ${ARROW} Restart QR service:"
+    echo "     ${CYAN}sudo systemctl restart directprint-qr${NC}"
+    echo ""
+    echo "  5. ${ARROW} QR Code (if enabled):"
     LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
     echo "     ${CYAN}http://${LOCAL_IP}:3000${NC}"
     echo ""
