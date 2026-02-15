@@ -30,23 +30,18 @@ export function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] px-4 relative overflow-hidden">
-            {/* Animated background elements */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 -left-48 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-            </div>
+        <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] px-4">
 
             <div className="max-w-md w-full relative z-10">
                 {/* Main Card */}
                 <div className="bg-card/80 backdrop-blur-xl border border-border rounded-2xl shadow-2xl p-8 mb-6">
                     {/* Logo/Header */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
-                            <Printer className="w-10 h-10 text-white" />
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl mb-4 shadow-lg">
+                            <Printer className="w-10 h-10 text-black" />
                         </div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
-                            DirectPrint
+                        <h1 className="text-4xl font-bold text-foreground mb-2">
+                            JusPri
                         </h1>
                         <p className="text-muted-foreground text-sm">
                             Professional • Fast • Secure
@@ -106,8 +101,8 @@ export function Login() {
                 {/* Features Grid */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="bg-card/60 backdrop-blur-md border border-border rounded-xl p-4 text-center hover:bg-card/80 transition-all duration-200">
-                        <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500/10 rounded-lg mb-3">
-                            <Zap className="w-6 h-6 text-blue-400" />
+                        <div className="inline-flex items-center justify-center w-12 h-12 bg-muted rounded-lg mb-3">
+                            <Zap className="w-6 h-6 text-foreground" />
                         </div>
                         <p className="text-sm font-medium text-foreground">Instant</p>
                         <p className="text-xs text-muted-foreground mt-1">Fast prints</p>

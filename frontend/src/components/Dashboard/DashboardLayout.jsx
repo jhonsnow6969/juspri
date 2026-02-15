@@ -25,7 +25,7 @@ export function DashboardLayout({ children, activeTab = 'print' }) {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]">
+        <div className="min-h-screen bg-[#0a0a0a]">
             {/* Mobile Header */}
             <div className="lg:hidden fixed top-0 left-0 right-0 bg-card/95 backdrop-blur-md border-b border-border z-50 px-4 py-3">
                 <div className="flex items-center justify-between">
@@ -61,11 +61,11 @@ export function DashboardLayout({ children, activeTab = 'print' }) {
                     {/* Logo */}
                     <div className="p-6 border-b border-border hidden lg:block">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                <Printer className="w-6 h-6 text-white" />
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                                <Printer className="w-6 h-6 text-black" />
                             </div>
                             <div>
-                                <h1 className="font-bold text-foreground">DirectPrint</h1>
+                                <h1 className="font-bold text-foreground">JusPri</h1>
                                 <p className="text-xs text-muted-foreground">Fast & Easy</p>
                             </div>
                         </div>

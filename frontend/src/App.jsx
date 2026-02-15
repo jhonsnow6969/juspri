@@ -279,7 +279,7 @@ function PrintInterface() {
   }, [addLog]);
 
 return (
-  <div className="min-h-screen bg-background flex items-center justify-center p-4">
+  <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
     <div className="w-full max-w-md mx-auto">
       <Card className="bg-card/90 backdrop-blur-xl border border-border shadow-2xl rounded-3xl">
         <CardHeader className="space-y-1 pb-4 border-b border-border">
@@ -290,7 +290,7 @@ return (
             </div>
             
             <span className="text-foreground">
-              DirectPrint
+              JusPri
             </span>
             
           </CardTitle>
@@ -352,11 +352,11 @@ return (
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="space-y-2">
                 <input
                   type="text"
-                  placeholder="Enter Kiosk ID (e.g., kiosk_001)"
-                  className="flex-1 px-4 py-3 bg-muted/10 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 text-sm transition-all"
+                  placeholder="Kiosk ID (e.g., kiosk_001)"
+                  className="w-full px-4 py-3 bg-muted/10 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 text-sm transition-all"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && e.target.value.trim()) {
                       handleScan([{ rawValue: e.target.value.trim() }]);
@@ -372,7 +372,7 @@ return (
                       input.value = '';
                     }
                   }}
-                  className="bg-white text-black hover:bg-neutral-200 px-6 transition-colors"
+                  className="w-full bg-white text-black hover:bg-neutral-200 py-3 transition-colors"
                 >
                   Connect
                 </Button>
