@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
+import { Printer, Zap, Shield, Clock } from 'lucide-react';
 
 export function Login() {
     const { signInWithGoogle, error: authError } = useAuth();
@@ -9,6 +10,8 @@ export function Login() {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Preserve query params when redirecting
     const from = (location.state?.from?.pathname || '') + (location.state?.from?.search || '') || '/';
 
     const handleGoogleSignIn = async () => {
@@ -17,8 +20,6 @@ export function Login() {
             setError(null);
             
             await signInWithGoogle();
-            
-            // Successful login - redirect
             navigate(from, { replace: true });
         } catch (err) {
             console.error('Login failed:', err);
@@ -29,37 +30,39 @@ export function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 px-4">
-            <div className="max-w-md w-full">
-                {/* Card */}
-                <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] px-4 relative overflow-hidden">
+            {/* Animated background elements */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-1/4 -left-48 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+            </div>
+
+            <div className="max-w-md w-full relative z-10">
+                {/* Main Card */}
+                <div className="bg-card/80 backdrop-blur-xl border border-border rounded-2xl shadow-2xl p-8 mb-6">
                     {/* Logo/Header */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                            </svg>
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+                            <Printer className="w-10 h-10 text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
                             DirectPrint
                         </h1>
-                        <p className="text-gray-600">
-                            Sign in to start printing
+                        <p className="text-muted-foreground text-sm">
+                            Professional • Fast • Secure
                         </p>
                     </div>
 
                     {/* Error Message */}
                     {(error || authError) && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <div className="flex items-start">
-                                <svg className="w-5 h-5 text-red-600 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
+                        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                            <div className="flex items-start gap-3">
+                                <Shield className="w-5 h-5 text-destructive mt-0.5" />
                                 <div className="flex-1">
-                                    <p className="text-sm font-medium text-red-800">
-                                        Sign in failed
+                                    <p className="text-sm font-medium text-destructive">
+                                        Authentication Failed
                                     </p>
-                                    <p className="text-sm text-red-700 mt-1">
+                                    <p className="text-sm text-destructive/80 mt-1">
                                         {error || authError}
                                     </p>
                                 </div>
@@ -71,7 +74,7 @@ export function Login() {
                     <button
                         onClick={handleGoogleSignIn}
                         disabled={loading}
-                        className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white hover:bg-gray-50 border-2 border-gray-200 rounded-xl font-semibold text-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl group"
                     >
                         {loading ? (
                             <>
@@ -89,34 +92,41 @@ export function Login() {
                                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                                 </svg>
-                                <span>Continue with Google</span>
+                                <span className="group-hover:translate-x-0.5 transition-transform">Continue with Google</span>
                             </>
                         )}
                     </button>
 
-                    {/* Info */}
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-600">
-                            By signing in, you agree to our Terms of Service
-                        </p>
-                    </div>
+                    {/* Privacy note */}
+                    <p className="mt-6 text-center text-xs text-muted-foreground">
+                        Secure authentication via Google OAuth
+                    </p>
                 </div>
 
-                {/* Features */}
-                <div className="mt-8 text-center text-white">
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <div className="text-2xl mb-1">🖨️</div>
-                            <p className="text-sm font-medium">Easy Printing</p>
+                {/* Features Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-card/60 backdrop-blur-md border border-border rounded-xl p-4 text-center hover:bg-card/80 transition-all duration-200">
+                        <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500/10 rounded-lg mb-3">
+                            <Zap className="w-6 h-6 text-blue-400" />
                         </div>
-                        <div>
-                            <div className="text-2xl mb-1">💳</div>
-                            <p className="text-sm font-medium">Secure Payment</p>
+                        <p className="text-sm font-medium text-foreground">Instant</p>
+                        <p className="text-xs text-muted-foreground mt-1">Fast prints</p>
+                    </div>
+
+                    <div className="bg-card/60 backdrop-blur-md border border-border rounded-xl p-4 text-center hover:bg-card/80 transition-all duration-200">
+                        <div className="inline-flex items-center justify-center w-12 h-12 bg-purple-500/10 rounded-lg mb-3">
+                            <Shield className="w-6 h-6 text-purple-400" />
                         </div>
-                        <div>
-                            <div className="text-2xl mb-1">⚡</div>
-                            <p className="text-sm font-medium">Fast Service</p>
+                        <p className="text-sm font-medium text-foreground">Secure</p>
+                        <p className="text-xs text-muted-foreground mt-1">Protected</p>
+                    </div>
+
+                    <div className="bg-card/60 backdrop-blur-md border border-border rounded-xl p-4 text-center hover:bg-card/80 transition-all duration-200">
+                        <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/10 rounded-lg mb-3">
+                            <Clock className="w-6 h-6 text-emerald-400" />
                         </div>
+                        <p className="text-sm font-medium text-foreground">24/7</p>
+                        <p className="text-xs text-muted-foreground mt-1">Always on</p>
                     </div>
                 </div>
             </div>

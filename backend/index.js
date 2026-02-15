@@ -564,21 +564,49 @@ app.get('/api/jobs/:job_id/status', verifyToken, async (req, res) => {
     }
 });
 
+// ==================== USER DASHBOARD ROUTES ====================
+
+// Get user's jobs with filtering
 app.get('/api/jobs/my-jobs', verifyToken, async (req, res) => {
-    try {
-        const jobs = await db.getJobs({ 
-            user_id: req.user.uid,
-            limit: 50 
-        });
-        
-        res.json({ 
-            jobs: jobs,
-            total: jobs.length 
-        });
-    } catch (error) {
-        console.error('[My Jobs] Error:', error);
-        res.status(500).json({ error: 'Failed to get jobs' });
-    }
+  try {
+    const { status, limit } = req.query;
+    
+    const filters = {
+      status: status && status !== 'all' ? status : undefined,
+      limit: limit ? parseInt(limit) : 50
+    };
+    
+    const jobs = await db.getUserJobs(req.user.uid, filters);
+    
+    res.json({ 
+      jobs: jobs,
+      total: jobs.length 
+    });
+  } catch (error) {
+    console.error('[My Jobs] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
+
+// Get user statistics
+app.get('/api/users/stats', verifyToken, async (req, res) => {
+  try {
+    const stats = await db.getUserStats(req.user.uid);
+    
+    res.json({
+      totalJobs: parseInt(stats.total_jobs) || 0,
+      totalPages: parseInt(stats.total_pages) || 0,
+      totalSpent: parseFloat(stats.total_spent) || 0,
+      successRate: parseFloat(stats.success_rate) || 0,
+      thisMonth: {
+        jobs: parseInt(stats.jobs_this_month) || 0,
+        spent: parseFloat(stats.spent_this_month) || 0
+      }
+    });
+  } catch (error) {
+    console.error('[User Stats] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
 });
 
 // ADMIN ROUTES

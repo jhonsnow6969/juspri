@@ -328,6 +328,81 @@ async function getUser(userId) {
     }
 }
 
+/**
+ * Get user's jobs with optional filtering
+ */
+async function getUserJobs(userId, filters = {}) {
+    try {
+        let query = 'SELECT * FROM jobs WHERE user_id = $1';
+        const params = [userId];
+        let paramIndex = 2;
+        
+        // Add status filter
+        if (filters.status) {
+            query += ` AND status = $${paramIndex}`;
+            params.push(filters.status);
+            paramIndex++;
+        }
+        
+        // Add date range filter (optional)
+        if (filters.startDate) {
+            query += ` AND created_at >= $${paramIndex}`;
+            params.push(filters.startDate);
+            paramIndex++;
+        }
+        
+        if (filters.endDate) {
+            query += ` AND created_at <= $${paramIndex}`;
+            params.push(filters.endDate);
+            paramIndex++;
+        }
+        
+        // Order by newest first
+        query += ' ORDER BY created_at DESC';
+        
+        // Add limit
+        const limit = filters.limit || 50;
+        query += ` LIMIT $${paramIndex}`;
+        params.push(limit);
+        
+        const result = await pool.query(query, params);
+        return result.rows;
+    } catch (error) {
+        console.error('Error getting user jobs:', error);
+        throw error;
+    }
+}
+
+/**
+ * Get user statistics
+ */
+async function getUserStats(userId) {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                COUNT(*) as total_jobs,
+                COALESCE(SUM(pages), 0) as total_pages,
+                COALESCE(SUM(total_cost), 0) as total_spent,
+                COALESCE(
+                    COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END)::float / NULLIF(COUNT(*), 0),
+                    0
+                ) as success_rate,
+                COUNT(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN 1 END) as jobs_this_month,
+                COALESCE(
+                    SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN total_cost ELSE 0 END),
+                    0
+                ) as spent_this_month
+            FROM jobs 
+            WHERE user_id = $1
+        `, [userId]);
+        
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error getting user stats:', error);
+        throw error;
+    }
+}
+
 // ==================== STATISTICS ====================
 
 /**
@@ -402,6 +477,8 @@ module.exports = {
     // Users
     upsertUser,
     getUser,
+    getUserJobs,  // <-- Added here
+    getUserStats, // <-- Added here
     
     // Stats
     getStats,
