@@ -301,27 +301,81 @@ install_imagemagick() {
 }
 
 # Setup Pi Agent
+# Setup Pi Agent
 setup_pi_agent() {
     print_section "Setting Up Pi Agent"
     
-    # Determine install directory
-    if [ -d "$SCRIPT_DIR/pi-agent" ]; then
-        PI_AGENT_DIR="$SCRIPT_DIR/pi-agent"
-        print_info "Found pi-agent in current directory"
-    else
-        print_step "Cloning repository..."
-        cd ~
-        if [ -d "qr-wifi-printer" ]; then
-            cd qr-wifi-printer
-            git pull
+    # Define installation directory
+    INSTALL_DIR="$HOME/directprint-agent"
+    
+    # Check if already installed
+    if [ -d "$INSTALL_DIR" ]; then
+        print_info "DirectPrint agent already installed at: $INSTALL_DIR"
+        echo ""
+        read -p "Update existing installation? (y/n): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_step "Updating pi-agent code..."
+            
+            cd "$INSTALL_DIR"
+            
+            # Backup current .env
+            if [ -f ".env" ]; then
+                cp .env .env.backup
+                print_info "Backed up .env file"
+            fi
+            
+            # Pull latest code (sparse checkout)
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Restore .env
+            if [ -f ".env.backup" ]; then
+                mv .env.backup .env
+                print_info "Restored .env file"
+            fi
+            
+            # Update dependencies
+            print_step "Updating dependencies..."
+            npm install
+            
+            print_success "Pi agent updated!"
+            PI_AGENT_DIR="$INSTALL_DIR"
+            return 0
         else
-            git clone https://github.com/revanthlol/qr-wifi-printer.git
-            cd qr-wifi-printer
+            print_info "Skipping update"
+            PI_AGENT_DIR="$INSTALL_DIR"
+            return 0
         fi
-        PI_AGENT_DIR="$HOME/qr-wifi-printer/pi-agent"
     fi
     
-    cd "$PI_AGENT_DIR"
+    # Fresh installation
+    print_step "Installing pi-agent (sparse checkout - only pi-agent folder)..."
+    
+    # Create install directory
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    
+    # Initialize git with sparse checkout
+    git init
+    git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
+    git config core.sparseCheckout true
+    
+    # Only checkout pi-agent folder
+    echo "pi-agent/*" > .git/info/sparse-checkout
+    
+    print_step "Downloading pi-agent files..."
+    git pull origin main
+    
+    # Move files from pi-agent subdirectory to root
+    if [ -d "pi-agent" ]; then
+        mv pi-agent/* .
+        mv pi-agent/.* . 2>/dev/null || true
+        rmdir pi-agent
+    fi
+    
+    print_success "Pi agent downloaded (sparse - only needed files)"
     
     # Install dependencies
     print_step "Installing Node.js dependencies..."
@@ -374,10 +428,7 @@ EOF
         print_info ".env file already exists, skipping"
     fi
     
-    # Test connection
-    print_step "Testing Pi Agent..."
-    timeout 5 node index.js || true
-    
+    PI_AGENT_DIR="$INSTALL_DIR"
     print_success "Pi Agent setup complete"
 }
 

@@ -1,345 +1,540 @@
-# DirectPrint 🖨️
+# 🖨️ DirectPrint - Cloud-Connected Print Kiosk System
 
-**Scan. Upload. Pay. Print.** The future of public printing is here.
+A modern, cloud-based printing solution that enables users to print documents from any device to physical kiosk printers via QR codes and web interface.
 
-A QR-code based cloud printing system that lets users print documents from their phones to any networked printer. Perfect for cafes, libraries, co-working spaces, and print shops.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18.x-61dafb)](https://reactjs.org/)
 
 ---
 
-## 🎯 What is DirectPrint?
+## 📋 Table of Contents
 
-DirectPrint is a complete printing solution with three components:
+- [Overview](#-overview)
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Prerequisites](#-prerequisites)
+- [Installation](#-installation)
+  - [Backend Setup](#1-backend-cloud-server)
+  - [Frontend Setup](#2-frontend-vercel)
+  - [Pi Agent Setup](#3-pi-agent-raspberry-pi)
+- [Configuration](#-configuration)
+- [Usage](#-usage)
+- [API Documentation](#-api-documentation)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-1. **Mobile Frontend** - Users scan QR code, upload PDF, see pricing, pay, and print
-2. **Cloud Backend** - Handles connections, page counting, payment verification, job routing
-3. **Pi Agent** - Runs on Raspberry Pi (or any laptop) to control the actual printer via CUPS
+---
 
-### How it Works
+## 🎯 Overview
 
-```
-📱 User scans QR code on printer
-    ↓
-📄 Uploads PDF from phone
-    ↓
-💰 System counts pages (e.g., 5 pages × ₹3 = ₹15)
-    ↓
-💳 User pays via Razorpay
-    ↓
-✅ Payment verified
-    ↓
-🖨️ Job sent to Pi Agent
-    ↓
-📄 Document prints!
-```
+DirectPrint is a three-component system that allows users to:
+1. Scan a QR code at a physical kiosk
+2. Upload documents via web interface
+3. Pay and print instantly
+
+Perfect for libraries, universities, coworking spaces, and print shops.
+
+### **Live Demo**
+- **Frontend:** https://qr-wifi-printer.vercel.app
+- **Backend API:** https://justpri.duckdns.org
 
 ---
 
 ## ✨ Features
 
-### For Users
-- ✅ No app installation needed
-- ✅ Works on any phone with camera
-- ✅ See exact price before paying
-- ✅ UPI/Cards/Net Banking accepted
-- ✅ Instant printing
-- ✅ Receipt via email (coming soon)
+### **User Features**
+- 🔐 **Google OAuth Authentication** - Secure login
+- 📱 **QR Code Discovery** - Scan to connect to nearest kiosk
+- 📄 **Multi-Format Support** - PDF, DOCX, TXT, PNG, JPG
+- 💳 **Payment Integration** - Pay per page (Razorpay ready)
+- 📊 **Print History** - Track all your print jobs
+- 🔄 **Real-time Status** - Live job status updates
+- 🌐 **Responsive Design** - Works on all devices
 
-### For Owners
-- ✅ Works with any USB printer
-- ✅ Runs on cheap hardware (Pi Zero W works!)
-- ✅ Cloud-based - access from anywhere
-- ✅ Auto page counting
-- ✅ Configurable pricing
-- ✅ Payment integration built-in
-- ✅ Print logs & analytics (coming soon)
+### **Admin Features**
+- 🖨️ **Multiple Kiosks** - Manage unlimited print stations
+- 📈 **Usage Statistics** - Track prints, revenue, success rate
+- 🔧 **Remote Configuration** - Update settings remotely
+- 📡 **Live Monitoring** - See kiosk status in real-time
+
+### **Technical Features**
+- 🚀 **Pull-Based Architecture** - Reliable job polling
+- 🔄 **Auto-Conversion** - Documents → PDF automatically
+- 🔒 **User Isolation** - Secure multi-tenant database
+- 📦 **PostgreSQL** - Persistent data storage
+- ⚡ **Socket.IO** - Real-time updates
+- 🐳 **Docker Ready** - Easy deployment
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Architecture
 
-### Prerequisites
-- Node.js 16+ installed
-- A USB printer
-- CUPS installed (for Pi agent)
-
-### 1. Clone the Repo
-```bash
-git clone https://github.com/yourusername/qr-wifi-printer.git
-cd qr-wifi-printer
+```
+┌─────────────────┐
+│   User Device   │
+│  (Web Browser)  │
+└────────┬────────┘
+         │ HTTPS
+         ▼
+┌─────────────────┐      ┌──────────────────┐
+│    Frontend     │◄────►│     Backend      │
+│  (Vercel/React) │      │ (Node.js/Express)│
+└─────────────────┘      └────────┬─────────┘
+                                  │
+                         ┌────────┴────────┐
+                         │   PostgreSQL    │
+                         │    Database     │
+                         └────────┬────────┘
+                                  │ Poll Jobs
+                                  ▼
+                         ┌─────────────────┐
+                         │    Pi Agent     │
+                         │  (Raspberry Pi) │
+                         └────────┬────────┘
+                                  │ CUPS
+                                  ▼
+                         ┌─────────────────┐
+                         │     Printer     │
+                         └─────────────────┘
 ```
 
-### 2. Start Backend
+### **Data Flow**
+
+1. User scans QR code → Opens frontend with `?kiosk_id=xxx`
+2. User uploads file → Backend creates job (status: PENDING)
+3. User pays → Backend marks job as PAID
+4. Pi agent polls → Fetches PAID jobs (status: QUEUED)
+5. Pi converts & prints → Updates status (PRINTING → COMPLETED)
+6. User receives notification
+
+---
+
+## 🛠️ Tech Stack
+
+### **Frontend**
+- React 18
+- Vite
+- TailwindCSS + shadcn/ui
+- React Router
+- Firebase Auth
+- Socket.IO Client
+- Axios
+
+### **Backend**
+- Node.js
+- Express.js
+- PostgreSQL
+- Socket.IO
+- Firebase Admin SDK
+- Multer (file uploads)
+
+### **Pi Agent**
+- Node.js
+- Socket.IO Client
+- CUPS (printing)
+- LibreOffice (document conversion)
+- ImageMagick (image conversion)
+- pdf-lib (PDF manipulation)
+
+---
+
+## 📦 Prerequisites
+
+### **For Backend:**
+- Node.js >= 16.x
+- PostgreSQL >= 12.x
+- Ubuntu/Debian server (or Oracle Cloud VM)
+- Domain name (optional: DuckDNS)
+
+### **For Frontend:**
+- Node.js >= 16.x
+- Vercel account (free)
+- Firebase project (for OAuth)
+
+### **For Pi Agent:**
+- Raspberry Pi (any model with WiFi)
+- Raspberry Pi OS / Ubuntu / Arch Linux
+- USB/Network printer
+- Internet connection
+
+---
+
+## 🚀 Installation
+
+### **1. Backend (Cloud Server)**
+
+#### **Step 1: Clone Repository**
 ```bash
-cd backend
+git clone https://github.com/revanthlol/qr-wifi-printer.git
+cd qr-wifi-printer/backend
+```
+
+#### **Step 2: Install Dependencies**
+```bash
 npm install
-node index.js
-# Running on http://localhost:3001
 ```
 
-### 3. Start Frontend
+#### **Step 3: Setup PostgreSQL**
+```bash
+# Install PostgreSQL
+sudo apt install postgresql postgresql-contrib
+
+# Create database
+sudo -u postgres psql
+CREATE DATABASE printkiosk;
+CREATE USER printuser WITH PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE printkiosk TO printuser;
+\q
+
+# Run schema
+psql -U printuser -d printkiosk < schema.sql
+```
+
+#### **Step 4: Configure Environment**
+```bash
+# Create .env file
+cp .env.example .env
+nano .env
+```
+
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=printkiosk
+DB_USER=printuser
+DB_PASSWORD=your_secure_password
+
+# Server
+PORT=3001
+NODE_ENV=production
+
+# Security
+SECRET_KEY=your_very_long_random_secret_key
+
+# CORS
+ALLOWED_ORIGINS=https://your-frontend.vercel.app
+
+# Firebase
+FIREBASE_SERVICE_ACCOUNT_PATH=./config/firebase-service-account.json
+```
+
+#### **Step 5: Start Backend**
+```bash
+# Development
+npm run dev
+
+# Production (with PM2)
+npm install -g pm2
+pm2 start index.js --name directprint-backend
+pm2 save
+pm2 startup
+```
+
+**Full backend setup guide:** [ORACLE_VM_DEPLOYMENT_GUIDE.md](docs/ORACLE_VM_DEPLOYMENT_GUIDE.md)
+
+---
+
+### **2. Frontend (Vercel)**
+
+#### **Step 1: Setup Firebase**
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Create new project
+3. Enable Google Authentication
+4. Get Firebase config
+
+#### **Step 2: Deploy to Vercel**
 ```bash
 cd frontend
-npm install
-npm run dev
-# Running on http://localhost:5173
+
+# Install Vercel CLI
+npm install -g vercel
+
+# Deploy
+vercel
+
+# Set environment variables in Vercel dashboard
 ```
 
-### 4. Setup Pi Agent
+#### **Step 3: Configure Environment Variables**
+
+In Vercel Dashboard → Settings → Environment Variables:
+
+```env
+VITE_API_URL=https://your-backend.com
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abc123
+```
+
+**Full frontend setup guide:** [VERCEL_DEPLOYMENT_GUIDE.md](docs/VERCEL_DEPLOYMENT_GUIDE.md)
+
+---
+
+### **3. Pi Agent (Raspberry Pi)**
+
+#### **Automated Setup (Recommended)**
+
 ```bash
-cd pi-agent
-npm install
-npm run setup  # Interactive wizard
-npm start
+# Download setup script
+wget https://raw.githubusercontent.com/revanthlol/qr-wifi-printer/main/setup-pi-agent.sh
+
+# Make executable
+chmod +x setup-pi-agent.sh
+
+# Run setup
+./setup-pi-agent.sh
 ```
 
-### 5. Test It!
-1. Generate test QR code: https://qr.munb.me/json-qr?lang=en
-   ```json
-   {
-     "ssid": "Test",
-     "ip": "localhost",
-     "port": 3001
-   }
-   ```
-2. Open http://localhost:5173
-3. Scan QR code with camera
-4. Upload a PDF
-5. See the price
-6. Click "Pay & Print" (currently mocked)
-7. Watch it print! 🎉
+The script will:
+- ✅ Install Node.js, CUPS, LibreOffice, ImageMagick
+- ✅ Download pi-agent code (sparse checkout)
+- ✅ Configure environment variables
+- ✅ Create systemd service for auto-start
+- ✅ Setup QR display server (optional)
 
----
+#### **Manual Setup**
 
-## 📁 Project Structure
-
-```
-qr-wifi-printer/
-├── backend/              # Cloud server (Node.js + Socket.io)
-│   ├── index.js         # Main server code
-│   ├── package.json
-│   └── uploads/         # Temp file storage
-│
-├── frontend/            # Mobile UI (React + Vite)
-│   ├── src/
-│   │   ├── App.jsx     # Main app logic
-│   │   ├── components/ # UI components
-│   │   └── lib/        # Utilities
-│   └── package.json
-│
-├── pi-agent/            # Printer agent (Node.js + CUPS)
-│   ├── index.js        # Agent logic
-│   ├── setup-wizard.js # Interactive setup
-│   ├── package.json
-│   └── print-queue/    # Temp print files
-│
-└── docs/               # Documentation
-    ├── DEPLOYMENT_GUIDE.md
-    ├── RAZORPAY_INTEGRATION.md
-    └── PI_AGENT_README.md
-```
-
----
-
-## 💰 Pricing System
-
-Default: **₹3 per page**
-
-### How it Works
-1. User uploads PDF
-2. Backend uses `pdf-lib` to count pages
-3. Price calculated: `pages × ₹3`
-4. Shown to user before payment
-5. After payment, job is executed
-
-### Customizing Pricing
-Edit `backend/index.js`:
-```javascript
-// Simple pricing
-const pricePerPage = 5; // ₹5 per page
-
-// Or bulk discounts
-function calculatePrice(pages) {
-  if (pages <= 5) return pages * 3;
-  if (pages <= 20) return pages * 2.5;
-  return pages * 2;
-}
-```
-
----
-
-## 🔐 Payment Integration
-
-Currently using **mock payments** for development.
-
-To enable real payments:
-1. Sign up at https://razorpay.com
-2. Get API keys (test mode first!)
-3. Follow [RAZORPAY_INTEGRATION.md](./RAZORPAY_INTEGRATION.md)
-4. Update frontend payment handler
-5. Test with test cards
-6. Switch to live keys for production
-
-**Payment Flow:**
-```
-User clicks Pay → Create Razorpay Order → Open Checkout Modal → 
-User Pays → Razorpay Returns → Verify Signature → Execute Print
-```
-
----
-
-## 🖨️ Supported Printers
-
-**Any USB printer that works with CUPS!**
-
-### Tested With
-- ✅ HP LaserJet series
-- ✅ Canon Pixma series
-- ✅ Brother HL-L series
-- ✅ Epson EcoTank
-- ✅ Generic thermal printers
-
-### To Check Compatibility
 ```bash
-lpstat -p  # Should list your printer
+# Install dependencies
+sudo apt update
+sudo apt install -y nodejs npm cups libreoffice-writer imagemagick git
+
+# Clone pi-agent only (sparse checkout)
+mkdir ~/directprint-agent
+cd ~/directprint-agent
+git init
+git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
+git config core.sparseCheckout true
+echo "pi-agent/*" > .git/info/sparse-checkout
+git pull origin main
+mv pi-agent/* .
+
+# Install npm packages
+npm install
+
+# Configure
+cp .env.example .env
+nano .env
 ```
 
-If your printer shows up, it will work! 🎉
-
----
-
-## 🔧 Configuration
-
-### Backend (.env)
+**Configuration (.env):**
 ```env
-NODE_ENV=production
-RAZORPAY_KEY_ID=rzp_test_xxxxx
-RAZORPAY_KEY_SECRET=xxxxx
-```
-
-### Frontend (.env.local)
-```env
-VITE_API_URL=http://localhost:3001
-```
-
-### Pi Agent (.env)
-```env
-CLOUD_URL=http://localhost:3001
+CLOUD_URL=https://your-backend.com
+FRONTEND_URL=https://your-frontend.vercel.app
+KIOSK_ID=kiosk_001
 PRINTER_NAME=auto
+POLL_INTERVAL=5000
+```
+
+**Start Service:**
+```bash
+# Manual start
+node index.js
+
+# Or use systemd (created by setup script)
+sudo systemctl start directprint-agent
+sudo systemctl enable directprint-agent
 ```
 
 ---
 
-## 🌐 Deployment
+## ⚙️ Configuration
 
-### Free Tier Option
-- **Frontend**: Vercel (Free)
-- **Backend**: Oracle Cloud (Free tier)
-- **Domain**: DuckDNS (Free)
-- **Cost**: ₹0/month + transaction fees
+### **Backend Configuration**
 
-### Production Option
-- **Frontend**: Vercel Pro ($20/mo)
-- **Backend**: DigitalOcean ($6/mo)
-- **Domain**: Namecheap ($10/year)
-- **Cost**: ~$27/month
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | 3001 |
+| `DB_HOST` | PostgreSQL host | localhost |
+| `DB_NAME` | Database name | printkiosk |
+| `SECRET_KEY` | JWT secret | (required) |
+| `ALLOWED_ORIGINS` | CORS origins | (required) |
+| `PRICE_PER_PAGE` | Default price in ₹ | 3 |
 
-See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for step-by-step instructions.
+### **Frontend Configuration**
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Backend API URL |
+| `VITE_FIREBASE_*` | Firebase config |
+
+### **Pi Agent Configuration**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CLOUD_URL` | Backend URL | (required) |
+| `KIOSK_ID` | Unique kiosk identifier | kiosk_hostname |
+| `PRINTER_NAME` | CUPS printer name | auto |
+| `POLL_INTERVAL` | Job polling interval (ms) | 5000 |
+
+---
+
+## 📖 Usage
+
+### **For Users:**
+
+1. **Scan QR Code** at kiosk
+2. **Login** with Google
+3. **Upload** document (PDF, DOCX, images)
+4. **Pay** for pages
+5. **Collect** printed document
+
+### **For Admins:**
+
+1. **Monitor** kiosks via dashboard
+2. **View** print statistics
+3. **Manage** pricing per kiosk
+4. **Check** job history
+
+---
+
+## 🔌 API Documentation
+
+### **Authentication**
+All API endpoints (except `/api/connect`) require Firebase JWT token:
+```
+Authorization: Bearer <firebase-id-token>
+```
+
+### **Endpoints**
+
+#### **Jobs**
+- `POST /api/jobs/create` - Create print job
+- `GET /api/jobs/my-jobs` - Get user's jobs
+- `GET /api/jobs/:id/status` - Get job status
+- `POST /api/jobs/:id/verify-payment` - Mark as paid
+- `GET /api/jobs/poll?kiosk_id=xxx` - Poll for jobs (Pi agent)
+
+#### **Users**
+- `GET /api/users/stats` - Get user statistics
+
+#### **Kiosks**
+- `POST /api/connect` - Check kiosk status (public)
+
+**Full API docs:** [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
 
 ---
 
 ## 🐛 Troubleshooting
 
-### "Printer Agent Offline"
+### **Backend Issues**
+
+**Database connection failed:**
 ```bash
-# Check if agent is running
-ps aux | grep "pi-agent"
+# Check PostgreSQL is running
+sudo systemctl status postgresql
+
+# Test connection
+psql -U printuser -d printkiosk -h localhost
+```
+
+**CORS errors:**
+```bash
+# Update ALLOWED_ORIGINS in .env
+ALLOWED_ORIGINS=https://your-frontend.vercel.app,https://another-domain.com
+```
+
+### **Frontend Issues**
+
+**API calls fail:**
+- Check `VITE_API_URL` is correct
+- Ensure backend CORS allows your domain
+- Check browser console for errors
+
+**Login doesn't work:**
+- Verify Firebase configuration
+- Check Firebase Auth is enabled
+- Ensure authorized domains include your Vercel URL
+
+### **Pi Agent Issues**
+
+**Can't connect to backend:**
+```bash
+# Test connectivity
+curl https://your-backend.com/api/status
 
 # Check logs
 sudo journalctl -u directprint-agent -f
-
-# Restart agent
-sudo systemctl restart directprint-agent
 ```
 
-### "Page count failed"
-- Ensure file is a valid PDF
-- Check backend has `pdf-lib` installed
-- Try a different PDF
-
-### "Print job failed"
+**Image conversion fails:**
 ```bash
-# Check CUPS status
-sudo systemctl status cups
-
-# Check printer
-lpstat -p
-
-# View CUPS logs
-sudo tail -f /var/log/cups/error_log
+# Fix ImageMagick policy
+sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
 ```
 
-### Quick System Test
+**Printer not found:**
 ```bash
-chmod +x test-system.sh
-./test-system.sh
+# List printers
+lpstat -p -d
+
+# Set default printer
+lpoptions -d printer_name
 ```
+
+**Full troubleshooting guide:** [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 ---
 
-## 📊 Tech Stack
+## 🤝 Contributing
 
-### Frontend
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **UI**: Tailwind CSS + shadcn/ui
-- **QR Scanner**: @yudiel/react-qr-scanner
-- **HTTP**: Axios
+We welcome contributions! Please follow these steps:
 
-### Backend
-- **Runtime**: Node.js
-- **Framework**: Express
-- **WebSockets**: Socket.io
-- **File Upload**: Multer
-- **PDF Processing**: pdf-lib
-- **Payment**: Razorpay
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-### Pi Agent
-- **Printing**: CUPS (lp command)
-- **Communication**: Socket.io-client
-- **PDF**: pdf-lib (for page counting)
+**Contribution Guidelines:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
-## 🛣️ Roadmap
+## 📄 License
 
-### Phase 1: Core Features ✅
-- [x] QR code scanning
-- [x] PDF upload
-- [x] Page counting
-- [x] Mock payment
-- [x] CUPS integration
-- [x] Cloud backend
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
-### Phase 2: Payment (In Progress)
-- [ ] Razorpay integration
-- [ ] Payment verification
-- [ ] Refund handling
-- [ ] Receipt generation
+---
 
-### Phase 3: Enhancement
-- [ ] User accounts
-- [ ] Print history
+## 🙏 Acknowledgments
+
+- Firebase for authentication
+- Vercel for frontend hosting
+- LibreOffice for document conversion
+- CUPS for printing system
+- shadcn/ui for beautiful components
+
+---
+
+## 📞 Support
+
+- **Issues:** [GitHub Issues](https://github.com/revanthlol/qr-wifi-printer/issues)
+- **Email:** your-email@example.com
+- **Documentation:** [Wiki](https://github.com/revanthlol/qr-wifi-printer/wiki)
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Razorpay payment integration
+- [ ] Multiple payment methods
+- [ ] Color/B&W printing options
+- [ ] Double-sided printing
 - [ ] Admin dashboard
-- [ ] Color vs B&W pricing
-- [ ] Duplex printing options
-- [ ] Multiple file formats
-- [ ] Email notifications
-
-### Phase 4: Scale
-- [ ] Multi-printer support
-- [ ] Load balancing
-- [ ] Analytics dashboard
-- [ ] Mobile apps (iOS/Android)
-- [ ] Franchise management
+- [ ] Email receipts
+- [ ] Job scheduling
+- [ ] Print presets
+- [ ] Mobile app (React Native)
 
 ---
+
+
+
+Want me to create any of the additional documentation files (API docs, troubleshooting guide, etc.)? 🚀
