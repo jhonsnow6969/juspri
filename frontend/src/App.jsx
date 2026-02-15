@@ -1,5 +1,6 @@
 import { useState, useCallback, lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import axios from 'axios';
 import { Printer, CheckCircle, Wifi, FileUp, Loader2, AlertCircle, IndianRupee, Zap, QrCode, LogOut, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -634,7 +635,20 @@ return (
 );
 }
 
-// Root App component with routing
+// Simple animated wrapper for page transitions
+function AnimatedPage({ children }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+// Root App component with routing - NO ANIMATION WRAPPER
 function App() {
   return (
     <BrowserRouter>
