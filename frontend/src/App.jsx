@@ -278,17 +278,21 @@ function PrintInterface() {
     addLog('Ready for next document');
   }, [addLog]);
 
-  return (
+return (
+  <div className="min-h-screen bg-background flex items-center justify-center p-4">
     <div className="w-full max-w-md mx-auto">
       <Card className="bg-card/90 backdrop-blur-xl border border-border shadow-2xl rounded-3xl">
         <CardHeader className="space-y-1 pb-4 border-b border-border">
           <CardTitle className="flex items-center gap-3 text-2xl">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Printer className="h-6 w-6 text-white" />
+            
+            <div className="w-10 h-10 bg-white text-black rounded-xl flex items-center justify-center shadow-lg">
+              <Printer className="h-6 w-6" />
             </div>
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            
+            <span className="text-foreground">
               DirectPrint
             </span>
+            
           </CardTitle>
         </CardHeader>
 
@@ -296,10 +300,10 @@ function PrintInterface() {
           {/* VIEW 1: QR Scanner */}
           {status === 'IDLE' && (
             <div className="space-y-4">
-              <div className="relative rounded-2xl overflow-hidden border-2 border-slate-700/50 shadow-inner">
+              <div className="relative rounded-2xl overflow-hidden border border-border shadow-inner">
               <Suspense fallback={
-                <div className="aspect-square bg-slate-800/50 flex items-center justify-center">
-                  <Loader2 className="animate-spin h-8 w-8 text-blue-400"/>
+                <div className="aspect-square bg-muted/20 flex items-center justify-center">
+                  <Loader2 className="animate-spin h-8 w-8 text-white"/>
                 </div>
               }>
                 {scannerActive && !cameraError ? (
@@ -312,13 +316,13 @@ function PrintInterface() {
                     }}
                   />
                 ) : (
-                  <div className="aspect-square bg-slate-800/50 flex flex-col items-center justify-center p-6 text-center">
-                    <QrCode className="h-16 w-16 text-slate-600 mb-4"/>
-                    <p className="text-slate-400 text-sm mb-4">{cameraError || 'Camera not active'}</p>
+                  <div className="aspect-square bg-muted/10 flex flex-col items-center justify-center p-6 text-center">
+                    <QrCode className="h-16 w-16 text-muted-foreground mb-4"/>
+                    <p className="text-muted-foreground text-sm mb-4">{cameraError || 'Camera not active'}</p>
                     <Button 
                       size="sm" 
                       onClick={() => { setScannerActive(true); setCameraError(null); }}
-                      className="bg-blue-600 hover:bg-blue-500"
+                      className="bg-white text-black hover:bg-neutral-200 transition-colors"
                     >
                       Enable Camera
                     </Button>
@@ -328,23 +332,23 @@ function PrintInterface() {
               </div>
               
               {cameraError && (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-400">
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-500">
                   <AlertCircle className="inline mr-2 h-4 w-4"/>
                   {cameraError}
                 </div>
               )}
               
-              <div className="text-center text-slate-500 text-sm">
+              <div className="text-center text-muted-foreground text-sm">
                 <p>Point camera at printer's QR code</p>
               </div>
 
               {/* Manual Entry */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-700"></div>
+                  <div className="w-full border-t border-border"></div>
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-slate-500">Or enter manually</span>
+                  <span className="bg-card px-2 text-muted-foreground">Or enter manually</span>
                 </div>
               </div>
               
@@ -352,7 +356,7 @@ function PrintInterface() {
                 <input
                   type="text"
                   placeholder="Enter Kiosk ID (e.g., kiosk_001)"
-                  className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="flex-1 px-4 py-3 bg-muted/10 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 text-sm transition-all"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && e.target.value.trim()) {
                       handleScan([{ rawValue: e.target.value.trim() }]);
@@ -368,7 +372,7 @@ function PrintInterface() {
                       input.value = '';
                     }
                   }}
-                  className="bg-blue-600 hover:bg-blue-500 px-6"
+                  className="bg-white text-black hover:bg-neutral-200 px-6 transition-colors"
                 >
                   Connect
                 </Button>
@@ -379,30 +383,32 @@ function PrintInterface() {
           {/* VIEW 2: Connect to Printer */}
           {(status === 'SCANNED' || status === 'CONNECTING' || status === 'ERROR') && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4">
+              {/* Removed blue gradient here */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <QrCode className="h-5 w-5 text-blue-400"/>
-                  <span className="text-sm font-medium text-slate-300">Kiosk Detected</span>
+                  <QrCode className="h-5 w-5 text-white"/>
+                  <span className="text-sm font-medium text-muted-foreground">Kiosk Detected</span>
                 </div>
-                <p className="text-lg font-bold text-white font-mono">{config?.kiosk_id}</p>
+                <p className="text-lg font-bold text-foreground font-mono">{config?.kiosk_id}</p>
                 {config?.location && (
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     📍 {config.location} {config.floor && `• Floor ${config.floor}`}
                   </p>
                 )}
               </div>
 
               {status === 'ERROR' && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-500">
                   <AlertCircle className="inline mr-2 h-4 w-4"/>
                   Kiosk offline or not found
                 </div>
               )}
               
+              {/* Removed blue gradient button here */}
               <Button 
                 onClick={connectPrinter} 
                 disabled={status === 'CONNECTING'} 
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg font-semibold py-6"
+                className="w-full bg-white text-black hover:bg-neutral-200 shadow-lg font-semibold py-6 transition-colors"
               >
                 {status === 'CONNECTING' ? (
                   <><Loader2 className="animate-spin mr-2 h-5 w-5"/> Checking...</>
@@ -415,7 +421,7 @@ function PrintInterface() {
                 variant="ghost" 
                 size="sm" 
                 onClick={resetFlow}
-                className="w-full text-slate-400 hover:text-slate-300 hover:bg-slate-800/50"
+                className="w-full text-muted-foreground hover:text-foreground hover:bg-white/5"
               >
                 ← Scan Again
               </Button>
@@ -428,24 +434,24 @@ function PrintInterface() {
               <label className="block w-full cursor-pointer group">
                 <div className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
                   file 
-                  ? 'border-emerald-500/50 bg-emerald-500/5' 
-                  : 'border-slate-600/50 hover:border-blue-500/50 hover:bg-slate-800/30'
+                  ? 'border-white/40 bg-white/5' 
+                  : 'border-border hover:border-white/30 hover:bg-white/5'
                 }`}>
                   <div className={`mx-auto h-16 w-16 mb-3 rounded-full flex items-center justify-center transition-all ${
-                    file ? 'bg-emerald-500/20' : 'bg-slate-700/50 group-hover:bg-blue-500/20'
+                    file ? 'bg-white/10' : 'bg-muted/20 group-hover:bg-white/10'
                   }`}>
-                    <FileUp className={`h-8 w-8 ${file ? 'text-emerald-400' : 'text-slate-400 group-hover:text-blue-400'}`} />
+                    <FileUp className={`h-8 w-8 ${file ? 'text-white' : 'text-muted-foreground group-hover:text-white'}`} />
                   </div>
                 
-                  <p className="text-base font-medium mb-1">
+                  <p className="text-base font-medium mb-1 text-foreground">
                     {file ? `${getFileIcon(file.name)} ${file.name}` : "Drop file here"}
                   </p>
                 
                   {file && (
                     <>
-                      <p className="text-sm text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
+                      <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
                       {getFileExt(file.name) !== '.pdf' && (
-                        <p className="text-xs text-yellow-400 mt-2">
+                        <p className="text-xs text-yellow-500 mt-2">
                           ⚡ Will be converted to PDF
                         </p>
                       )}
@@ -454,8 +460,8 @@ function PrintInterface() {
                 
                   {!file && (
                     <>
-                      <p className="text-xs text-slate-500 mt-2">or click to browse</p>
-                      <p className="text-xs text-slate-600 mt-1">
+                      <p className="text-xs text-muted-foreground mt-2">or click to browse</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">
                         Supports: PDF, Word, Text, Images
                       </p>
                     </>
@@ -472,7 +478,7 @@ function PrintInterface() {
               </label>
             
               {status === 'CALCULATING' && (
-                <div className="flex items-center justify-center gap-3 text-blue-400 bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
+                <div className="flex items-center justify-center gap-3 text-foreground bg-white/5 rounded-lg p-4 border border-white/10">
                   <Loader2 className="animate-spin h-5 w-5"/>
                   <span className="text-sm font-medium">Processing file...</span>
                 </div>
@@ -483,30 +489,32 @@ function PrintInterface() {
           {/* VIEW 4: Payment */}
           {status === 'PAYMENT' && pricing && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-700/30 rounded-xl p-5 shadow-lg">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 shadow-lg">
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-700/30">
-                    <span className="text-slate-400 text-sm">Job ID</span>
-                    <span className="text-white text-xs font-mono">{pricing.job_id.slice(0, 16)}...</span>
+                  <div className="flex justify-between items-center pb-3 border-b border-border">
+                    <span className="text-muted-foreground text-sm">Job ID</span>
+                    <span className="text-foreground text-xs font-mono">{pricing.job_id.slice(0, 16)}...</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-sm">Pages</span>
-                    <span className="text-white text-lg font-bold">{pricing.pages}</span>
+                    <span className="text-muted-foreground text-sm">Pages</span>
+                    <span className="text-foreground text-lg font-bold">{pricing.pages}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-sm">Rate</span>
-                    <span className="text-white text-sm">₹{pricing.pricePerPage}/page</span>
+                    <span className="text-muted-foreground text-sm">Rate</span>
+                    <span className="text-foreground text-sm">₹{pricing.pricePerPage}/page</span>
                   </div>
-                  <div className="border-t border-slate-700/30 mt-4 pt-4 flex justify-between items-center">
-                    <span className="text-white font-semibold text-lg">Total</span>
-                    <span className="text-emerald-400 text-3xl font-bold">₹{pricing.totalPrice}</span>
+                  <div className="border-t border-border mt-4 pt-4 flex justify-between items-center">
+                    <span className="text-foreground font-semibold text-lg">Total</span>
+                    {/* Changed from green to white */}
+                    <span className="text-foreground text-3xl font-bold">₹{pricing.totalPrice}</span>
                   </div>
                 </div>
               </div>
               
+              {/* Removed green gradient button here */}
               <Button 
                 onClick={handlePayment} 
-                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-6 text-lg shadow-lg"
+                className="w-full bg-white text-black hover:bg-neutral-200 font-bold py-6 text-lg shadow-lg transition-colors"
               >
                 <IndianRupee className="mr-2 h-5 w-5"/>
                 Pay ₹{pricing.totalPrice} & Print
@@ -516,7 +524,7 @@ function PrintInterface() {
                 variant="ghost" 
                 size="sm" 
                 onClick={() => { setStatus('CONNECTED'); setFile(null); setPricing(null); }} 
-                className="w-full text-slate-400 hover:text-slate-300 hover:bg-slate-800/50"
+                className="w-full text-muted-foreground hover:text-foreground hover:bg-white/5"
               >
                 ← Choose Different File
               </Button>
@@ -527,14 +535,15 @@ function PrintInterface() {
           {status === 'PRINTING' && (
             <div className="space-y-6 text-center py-8">
               <div className="relative">
-                <Loader2 className="animate-spin h-16 w-16 mx-auto text-blue-400"/>
+                {/* Changed spinner and glow from blue to white */}
+                <Loader2 className="animate-spin h-16 w-16 mx-auto text-white"/>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="h-20 w-20 bg-blue-500/20 rounded-full blur-xl"></div>
+                  <div className="h-20 w-20 bg-white/10 rounded-full blur-xl"></div>
                 </div>
               </div>
               <div>
-                <p className="text-xl font-semibold mb-2">Printing...</p>
-                <p className="text-sm text-slate-400">Checking status</p>
+                <p className="text-xl font-semibold mb-2 text-foreground">Printing...</p>
+                <p className="text-sm text-muted-foreground">Checking status</p>
               </div>
             </div>
           )}
@@ -543,23 +552,22 @@ function PrintInterface() {
           {status === 'COMPLETED' && (
             <div className="space-y-6 text-center py-8">
               <div className="relative">
-                <CheckCircle className="h-20 w-20 mx-auto text-emerald-400"/>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="h-24 w-24 bg-emerald-500/20 rounded-full blur-xl"></div>
-                </div>
+                {/* Changed check mark to standard white */}
+                <CheckCircle className="h-20 w-20 mx-auto text-foreground"/>
               </div>
               <div>
-                <p className="text-2xl font-bold mb-2 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
+                {/* Removed text gradient, made it solid text-foreground */}
+                <p className="text-2xl font-bold mb-2 text-foreground">
                   Print Complete!
                 </p>
-                <p className="text-sm text-slate-400">Collect your document</p>
+                <p className="text-sm text-muted-foreground">Collect your document</p>
               </div>
               
-              {/* NEW: Two button options */}
               <div className="space-y-3">
+                {/* Removed blue/purple gradient button here */}
                 <Button 
                   onClick={printAnotherOnSameKiosk} 
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-6"
+                  className="w-full bg-white text-black hover:bg-neutral-200 font-semibold py-6 transition-colors"
                 >
                   <Printer className="mr-2 h-5 w-5"/>
                   Print Another Document
@@ -568,7 +576,7 @@ function PrintInterface() {
                 <Button 
                   onClick={resetFlow} 
                   variant="ghost"
-                  className="w-full text-slate-400 hover:text-slate-300 hover:bg-slate-800/50"
+                  className="w-full text-muted-foreground hover:text-foreground hover:bg-white/5"
                 >
                   ← Exit to Scanner
                 </Button>
@@ -577,9 +585,9 @@ function PrintInterface() {
           )}
           
           {/* Logs */}
-          <div className="bg-[#0a0f1a] backdrop-blur-sm text-emerald-400 text-[10px] font-mono p-4 rounded-xl h-24 overflow-y-auto border border-[#1e293b] shadow-inner">
+          <div className="bg-black/40 backdrop-blur-sm text-muted-foreground text-[10px] font-mono p-4 rounded-xl h-24 overflow-y-auto border border-border shadow-inner">
             {logs.length === 0 ? (
-              <div className="text-slate-600">// System ready...</div>
+              <div>// System ready...</div>
             ) : (
               logs.slice(0, 10).map((l, i) => <div key={i} className="mb-1">{l}</div>)
             )}
@@ -587,7 +595,8 @@ function PrintInterface() {
         </CardContent>
       </Card>
     </div>
-  );
+  </div>
+);
 }
 
 // Root App component with routing
