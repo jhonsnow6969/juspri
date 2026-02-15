@@ -123,28 +123,63 @@ function PrintInterface() {
     try {
       let printerData = {};
       
-      if (rawValue.trim().startsWith('{')) {
+      // STEP 1: Check if it's a URL (for QR codes from pi-agent/qr-server)
+      if (rawValue.includes('http://') || rawValue.includes('https://')) {
+        try {
+          const url = new URL(rawValue);
+          const kioskId = url.searchParams.get('kiosk_id');
+          const location = url.searchParams.get('location');
+          const floor = url.searchParams.get('floor');
+          
+          if (!kioskId) {
+            addLog("QR URL missing kiosk_id parameter");
+            setScannerActive(true);
+            return;
+          }
+          
+          printerData = {
+            kiosk_id: kioskId,
+            location: location || undefined,
+            floor: floor || undefined
+          };
+          
+          addLog(`QR Decoded: Kiosk ${kioskId}`);
+          if (location) {
+            addLog(`Location: ${location}${floor ? `, Floor ${floor}` : ''}`);
+          }
+        } catch (urlError) {
+          addLog("Invalid URL format");
+          setScannerActive(true);
+          return;
+        }
+      }
+      // STEP 2: Check if it's JSON format
+      else if (rawValue.trim().startsWith('{')) {
         printerData = JSON.parse(rawValue);
         if (!printerData.kiosk_id) {
           printerData.kiosk_id = printerData.ip || 'default_kiosk';
         }
-      } else {
+        addLog(`QR Decoded: Kiosk ${printerData.kiosk_id}`);
+      }
+      // STEP 3: Treat as plain kiosk_id (manual entry or simple QR)
+      else {
         printerData = { 
-          kiosk_id: rawValue,
-          ip: rawValue, 
+          kiosk_id: rawValue.trim(),
+          ip: rawValue.trim(), 
           port: 9100 
         };
+        addLog(`QR Decoded: Kiosk ${rawValue.trim()}`);
       }
-
+  
       setConfig(printerData);
       setStatus('SCANNED');
-      addLog(`QR Decoded: Kiosk ${printerData.kiosk_id}`);
     } catch (e) {
+      console.error('QR decode error:', e);
       addLog("Invalid QR Format");
       setScannerActive(true);
     }
   }, [addLog]);
-
+  
   const handleScanError = useCallback((error) => {
     console.warn('Camera error:', error);
     setCameraError('Camera access denied. Allow permissions or use manual entry below.');

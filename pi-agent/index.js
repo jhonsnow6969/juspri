@@ -37,8 +37,8 @@ checkConversionTools();
 const qrUrl = `${FRONTEND_URL}?kiosk_id=${KIOSK_ID}`;
 
 console.log('\n📱 Scan this QR code to connect:\n');
-qrcode.generate(qrUrl, { small: true });
-console.log(`\n🔗 Or visit: ${qrUrl}\n`);
+qrcode.generate(KIOSK_ID, { small: true });
+console.log(`\n🔗 Or visit: ${FRONTEND_URL}?kiosk_id=${KIOSK_ID}\n`);
 
 // ==================== SOCKET CONNECTION ====================
 const socket = io(CLOUD_SERVER, {
