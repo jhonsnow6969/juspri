@@ -1,47 +1,39 @@
 // frontend/src/components/Dashboard/History.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useAuth } from '../AuthProvider';
 import axios from 'axios';
-import { FileText, Clock, CheckCircle, XCircle, Loader2, Calendar, IndianRupee } from 'lucide-react';
+import { FileText, Clock, CheckCircle, XCircle, Loader2, Calendar, IndianRupee, TrendingUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export function History() {
-    const { getAuthHeader } = useAuth();
-    const [jobs, setJobs] = useState([]);
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // all, completed, printing, failed
+// Memoized stat card to prevent unnecessary re-renders
+const StatCard = memo(({ icon: Icon, label, value, color, delay }) => (
+    <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay }}
+        className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-4 hover:bg-card/70 transition-colors"
+    >
+        <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <Icon className={`w-4 h-4 ${color}`} />
+        </div>
+        <motion.p
+            initial={{ scale: 0.5 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.3, delay: delay + 0.1, type: "spring" }}
+            className="text-2xl font-bold text-foreground"
+        >
+            {value}
+        </motion.p>
+    </motion.div>
+));
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+StatCard.displayName = 'StatCard';
 
-    useEffect(() => {
-        fetchHistory();
-    }, [filter]);
-
-    const fetchHistory = async () => {
-        try {
-            setLoading(true);
-            const authHeader = await getAuthHeader();
-
-            // Fetch jobs
-            const jobsResponse = await axios.get(`${API_URL}/api/jobs/my-jobs`, {
-                headers: { 'Authorization': authHeader },
-                params: { status: filter !== 'all' ? filter : undefined }
-            });
-
-            // Fetch stats
-            const statsResponse = await axios.get(`${API_URL}/api/users/stats`, {
-                headers: { 'Authorization': authHeader }
-            });
-
-            setJobs(jobsResponse.data.jobs || []);
-            setStats(statsResponse.data);
-        } catch (error) {
-            console.error('Failed to fetch history:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+// Memoized job card for better performance
+const JobCard = memo(({ job, index }) => {
     const getStatusIcon = (status) => {
         switch (status) {
             case 'COMPLETED': return <CheckCircle className="w-5 h-5 text-emerald-400" />;
@@ -67,115 +59,247 @@ export function History() {
         );
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+    return (
+        <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2, delay: index * 0.05 }}
+            layout
+            className="p-4 hover:bg-card/30 transition-colors cursor-pointer"
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+        >
+            <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <motion.div
+                        className="mt-1"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: index * 0.05 + 0.1, type: "spring" }}
+                    >
+                        {getStatusIcon(job.status)}
+                    </motion.div>
+                    <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                            {job.filename}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
+                            <span className="flex items-center gap-1">
+                                <FileText className="w-3 h-3" />
+                                {job.pages} pages
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <IndianRupee className="w-3 h-3" />
+                                ₹{job.total_cost}
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(job.created_at).toLocaleDateString()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 + 0.15 }}
+                >
+                    {getStatusBadge(job.status)}
+                </motion.div>
             </div>
-        );
+        </motion.div>
+    );
+});
+
+JobCard.displayName = 'JobCard';
+
+// Skeleton loader component
+const HistorySkeleton = () => (
+    <div className="space-y-6">
+        {/* Stats skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-card/50 border border-border rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-4 rounded-full" />
+                    </div>
+                    <Skeleton className="h-8 w-16" />
+                </div>
+            ))}
+        </div>
+
+        {/* Filter skeleton */}
+        <Skeleton className="h-10 w-full max-w-md" />
+
+        {/* Jobs skeleton */}
+        <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+            {[...Array(5)].map((_, i) => (
+                <div key={i} className="p-4 border-b border-border last:border-b-0">
+                    <div className="flex items-start gap-3">
+                        <Skeleton className="h-5 w-5 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                        </div>
+                        <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+export function History() {
+    const { getAuthHeader } = useAuth();
+    const [jobs, setJobs] = useState([]);
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all');
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+    useEffect(() => {
+        fetchHistory();
+    }, [filter]);
+
+    const fetchHistory = async () => {
+        try {
+            setLoading(true);
+            const authHeader = await getAuthHeader();
+
+            // Fetch both in parallel for better performance
+            const [jobsResponse, statsResponse] = await Promise.all([
+                axios.get(`${API_URL}/api/jobs/my-jobs`, {
+                    headers: { 'Authorization': authHeader },
+                    params: { status: filter !== 'all' ? filter : undefined }
+                }),
+                axios.get(`${API_URL}/api/users/stats`, {
+                    headers: { 'Authorization': authHeader }
+                })
+            ]);
+
+            setJobs(jobsResponse.data.jobs || []);
+            setStats(statsResponse.data);
+        } catch (error) {
+            console.error('Failed to fetch history:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return <HistorySkeleton />;
     }
 
     return (
-        <div className="space-y-6">
-            {/* Stats Cards */}
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+        >
+            {/* Stats Cards - Stagger animation */}
             {stats && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Total Jobs</span>
-                            <FileText className="w-4 h-4 text-blue-400" />
-                        </div>
-                        <p className="text-2xl font-bold text-foreground">{stats.totalJobs || 0}</p>
-                    </div>
-
-                    <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Total Pages</span>
-                            <FileText className="w-4 h-4 text-purple-400" />
-                        </div>
-                        <p className="text-2xl font-bold text-foreground">{stats.totalPages || 0}</p>
-                    </div>
-
-                    <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Total Spent</span>
-                            <IndianRupee className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <p className="text-2xl font-bold text-foreground">₹{stats.totalSpent || 0}</p>
-                    </div>
-
-                    <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-muted-foreground">Success Rate</span>
-                            <CheckCircle className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <p className="text-2xl font-bold text-foreground">{Math.round((stats.successRate || 0) * 100)}%</p>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard
+                        icon={FileText}
+                        label="Total Jobs"
+                        value={stats.totalJobs || 0}
+                        color="text-blue-400"
+                        delay={0}
+                    />
+                    <StatCard
+                        icon={FileText}
+                        label="Total Pages"
+                        value={stats.totalPages || 0}
+                        color="text-purple-400"
+                        delay={0.1}
+                    />
+                    <StatCard
+                        icon={IndianRupee}
+                        label="Total Spent"
+                        value={`₹${stats.totalSpent || 0}`}
+                        color="text-emerald-400"
+                        delay={0.2}
+                    />
+                    <StatCard
+                        icon={TrendingUp}
+                        label="Success Rate"
+                        value={`${Math.round((stats.successRate || 0) * 100)}%`}
+                        color="text-emerald-400"
+                        delay={0.3}
+                    />
                 </div>
             )}
 
-            {/* Filter Tabs */}
-            <div className="flex gap-2 flex-wrap">
-                {['all', 'COMPLETED', 'PRINTING', 'FAILED'].map((filterOption) => (
-                    <button
-                        key={filterOption}
-                        onClick={() => setFilter(filterOption)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                            filter === filterOption
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-card/50 text-muted-foreground hover:bg-card border border-border'
-                        }`}
-                    >
-                        {filterOption === 'all' ? 'All Jobs' : filterOption}
-                    </button>
-                ))}
-            </div>
+            {/* Filter Tabs - Using shadcn Tabs */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+            >
+                <Tabs value={filter} onValueChange={setFilter} className="w-full">
+                    <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+                        <TabsTrigger value="all">All Jobs</TabsTrigger>
+                        <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
+                        <TabsTrigger value="PRINTING">Printing</TabsTrigger>
+                        <TabsTrigger value="FAILED">Failed</TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            </motion.div>
 
-            {/* Jobs List */}
-            <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl overflow-hidden">
-                {jobs.length === 0 ? (
-                    <div className="text-center py-12">
-                        <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">No print jobs yet</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-border">
-                        {jobs.map((job) => (
-                            <div key={job.id} className="p-4 hover:bg-card/30 transition-colors">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex items-start gap-3 flex-1">
-                                        <div className="mt-1">
-                                            {getStatusIcon(job.status)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-foreground truncate">
-                                                {job.filename}
-                                            </p>
-                                            <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                                                <span className="flex items-center gap-1">
-                                                    <FileText className="w-3 h-3" />
-                                                    {job.pages} pages
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <IndianRupee className="w-3 h-3" />
-                                                    ₹{job.total_cost}
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <Calendar className="w-3 h-3" />
-                                                    {new Date(job.created_at).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        {getStatusBadge(job.status)}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
+            {/* Jobs List - Animated */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="bg-card/50 backdrop-blur-sm border border-border rounded-xl overflow-hidden"
+            >
+                <AnimatePresence mode="wait">
+                    {jobs.length === 0 ? (
+                        <motion.div
+                            key="empty"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="text-center py-12"
+                        >
+                            <motion.div
+                                animate={{ 
+                                    y: [0, -10, 0],
+                                }}
+                                transition={{ 
+                                    duration: 2,
+                                    repeat: Infinity,
+                                    ease: "easeInOut"
+                                }}
+                            >
+                                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                            </motion.div>
+                            <p className="text-muted-foreground">No print jobs yet</p>
+                            <p className="text-sm text-muted-foreground/60 mt-1">
+                                Start by printing your first document!
+                            </p>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="jobs"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="divide-y divide-border"
+                        >
+                            <AnimatePresence>
+                                {jobs.map((job, index) => (
+                                    <JobCard key={job.id} job={job} index={index} />
+                                ))}
+                            </AnimatePresence>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.div>
+        </motion.div>
     );
 }
