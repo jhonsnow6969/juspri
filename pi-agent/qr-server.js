@@ -33,102 +33,70 @@ app.get('/', async (req, res) => {
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>JusPri - ${KIOSK_ID}</title>
         <style>
-            /* Shadcn UI Dark Theme Variables */
             :root {
                 --background: #000000;
                 --card: #111111;
                 --foreground: #ffffff;
-                --muted: #262626;
                 --muted-foreground: #a3a3a3;
                 --border: #27272a;
                 --success: #10b981;
                 --success-bg: rgba(16, 185, 129, 0.1);
-                --radius: 24px;
+                --radius: 2rem;
+                /* Fluid font base */
+                font-size: clamp(12px, 2vh, 18px);
             }
     
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
     
             body {
-                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                font-family: ui-sans-serif, system-ui, sans-serif;
                 background-color: var(--background);
                 color: var(--foreground);
-                min-height: 100vh;
+                height: 100vh;
+                width: 100vw;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                padding: 20px;
-                line-height: 1.5;
-                -webkit-font-smoothing: antialiased;
+                overflow: hidden; /* Prevents scrollbars on kiosks */
             }
     
             .container {
                 background-color: var(--card);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-                padding: 40px 32px;
+                padding: 5vh 5vw;
                 text-align: center;
-                max-width: 420px;
-                width: 100%;
+                /* Responsive Widths */
+                width: 90vw;
+                max-width: 600px;
+                max-height: 95vh;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                justify-content: space-around; /* Spreads content evenly */
+                transition: all 0.3s ease;
             }
     
-            .header {
-                margin-bottom: 24px;
-            }
-    
-            .logo {
-                background-color: var(--foreground);
-                color: var(--background);
-                width: 48px;
-                height: 48px;
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto 16px;
-                box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.1);
-            }
-    
-            .logo svg {
-                width: 24px;
-                height: 24px;
-                stroke: currentColor;
-            }
-    
-            h1 {
-                font-size: 24px;
-                font-weight: 600;
-                letter-spacing: -0.025em;
-                margin-bottom: 4px;
-            }
-    
-            .subtitle {
-                font-size: 14px;
-                color: var(--muted-foreground);
+            .header h1 {
+                font-size: 2rem;
+                font-weight: 700;
+                margin-bottom: 0.5rem;
             }
     
             .qr-wrapper {
-                /* QR codes must remain on a white background to be scannable by all devices */
                 background: #ffffff;
-                padding: 16px;
-                border-radius: 16px;
-                margin-bottom: 24px;
-                width: 100%;
-                max-width: 260px;
-                aspect-ratio: 1 / 1;
+                padding: 1.5rem;
+                border-radius: 1.5rem;
+                /* Scales QR based on the smaller of height or width */
+                width: min(50vw, 40vh);
+                height: min(50vw, 40vh);
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                margin: 1rem 0;
             }
     
             .qr-code {
@@ -140,112 +108,66 @@ app.get('/', async (req, res) => {
             .info-card {
                 background-color: rgba(255, 255, 255, 0.03);
                 border: 1px solid var(--border);
-                border-radius: 12px;
-                padding: 16px;
+                border-radius: 1rem;
+                padding: 1rem;
                 width: 100%;
-                margin-bottom: 24px;
-            }
-    
-            .kiosk-id-label {
-                font-size: 12px;
-                color: var(--muted-foreground);
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                margin-bottom: 4px;
             }
     
             .kiosk-id-value {
-                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-                font-size: 20px;
-                font-weight: 700;
-                letter-spacing: 0.05em;
-                margin-bottom: 12px;
-            }
-    
-            .location-info {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                font-size: 13px;
-                color: var(--muted-foreground);
-            }
-    
-            .divider {
-                color: var(--border);
+                font-family: ui-monospace, monospace;
+                font-size: 1.5rem;
+                font-weight: 800;
+                color: var(--foreground);
             }
     
             .status-badge {
                 display: inline-flex;
                 align-items: center;
-                gap: 6px;
+                gap: 0.5rem;
                 background-color: var(--success-bg);
                 color: var(--success);
-                border: 1px solid rgba(16, 185, 129, 0.2);
-                padding: 4px 12px;
-                border-radius: 9999px;
-                font-size: 12px;
-                font-weight: 500;
-                margin-top: 16px;
+                padding: 0.5rem 1rem;
+                border-radius: 2rem;
+                font-size: 0.8rem;
+                margin-top: 0.5rem;
             }
     
             .status-dot {
-                width: 6px;
-                height: 6px;
+                width: 8px;
+                height: 8px;
                 background-color: var(--success);
                 border-radius: 50%;
-                animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+                animation: pulse 2s infinite;
             }
     
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
+            @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     
-            .instructions {
-                font-size: 14px;
-                color: var(--muted-foreground);
-                margin-bottom: 16px;
-            }
-    
-            .instructions strong {
-                color: var(--foreground);
-                display: block;
-                margin-bottom: 4px;
+            /* Small screen adjustments (like 3.5" or 5" Pi displays) */
+            @media (max-height: 500px) {
+                .container { 
+                    flex-direction: row; 
+                    max-width: 95vw; 
+                    padding: 2vh;
+                    gap: 20px;
+                }
+                .header, .instructions, .footer { display: none; } /* Hide fluff to save space */
+                .qr-wrapper { width: 40vh; height: 40vh; margin: 0; }
+                .info-card { flex: 1; }
             }
     
             .url-display {
-                background-color: rgba(0, 0, 0, 0.4);
-                border: 1px solid var(--border);
-                border-radius: 8px;
-                padding: 10px 12px;
-                font-size: 11px;
-                color: var(--muted-foreground);
-                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: 0.7rem;
+                opacity: 0.6;
+                margin-top: 1rem;
                 word-break: break-all;
-                width: 100%;
-            }
-    
-            .footer {
-                margin-top: 24px;
-                padding-top: 16px;
-                border-top: 1px solid var(--border);
-                font-size: 12px;
-                color: var(--muted-foreground);
-                width: 100%;
             }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                </div>
-                <h1>JusPri Kiosk</h1>
-                <p class="subtitle">Fast & Easy Document Printing</p>
+                <h1>JusPri</h1>
+                <p style="color: var(--muted-foreground)">Fast Document Printing</p>
             </div>
     
             <div class="qr-wrapper">
@@ -253,35 +175,24 @@ app.get('/', async (req, res) => {
             </div>
     
             <div class="info-card">
-                <div class="kiosk-id-label">Kiosk ID</div>
+                <div style="font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Kiosk ID</div>
                 <div class="kiosk-id-value">${KIOSK_ID}</div>
                 
-                <div class="location-info">
-                    <span>📍 ${LOCATION}</span>
-                    <span class="divider">|</span>
-                    <span>Floor ${FLOOR}</span>
-                </div>
-    
                 <div class="status-badge">
                     <span class="status-dot"></span>
-                    Online & Ready
+                    Ready to Print
                 </div>
             </div>
     
             <div class="instructions">
-                <strong>📱 Scan to Print</strong>
-                Point your camera at the QR code to connect
+                <strong>Scan to Print</strong>
             </div>
     
             <div class="url-display">${qrUrl}</div>
-    
-            <div class="footer">
-                Powered by JusPri
-            </div>
         </div>
     
         <script>
-            // Auto-refresh every 5 minutes to ensure up-to-date status
+            // Auto-refresh every 5 minutes
             setTimeout(() => location.reload(), 300000);
         </script>
     </body>
