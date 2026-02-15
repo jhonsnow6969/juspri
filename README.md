@@ -1,11 +1,5 @@
-# 🖨️ DirectPrint - Cloud-Connected Print Kiosk System
-
+# 🖨️ JusPri - Cloud-Connected Print Kiosk System
 A modern, cloud-based printing solution that enables users to print documents from any device to physical kiosk printers via QR codes and web interface.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-18.x-61dafb)](https://reactjs.org/)
-
 ---
 
 ## 📋 Table of Contents
@@ -23,8 +17,6 @@ A modern, cloud-based printing solution that enables users to print documents fr
 - [Usage](#-usage)
 - [API Documentation](#-api-documentation)
 - [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ---
 
@@ -144,13 +136,13 @@ Perfect for libraries, universities, coworking spaces, and print shops.
 ## 📦 Prerequisites
 
 ### **For Backend:**
-- Node.js >= 16.x
+- Node.js >= 20.x
 - PostgreSQL >= 12.x
 - Ubuntu/Debian server (or Oracle Cloud VM)
 - Domain name (optional: DuckDNS)
 
 ### **For Frontend:**
-- Node.js >= 16.x
+- Node.js >= 20.x
 - Vercel account (free)
 - Firebase project (for OAuth)
 
@@ -163,20 +155,16 @@ Perfect for libraries, universities, coworking spaces, and print shops.
 ---
 
 ## 🚀 Installation
-
 ### **1. Backend (Cloud Server)**
-
 #### **Step 1: Clone Repository**
 ```bash
 git clone https://github.com/revanthlol/qr-wifi-printer.git
 cd qr-wifi-printer/backend
 ```
-
 #### **Step 2: Install Dependencies**
 ```bash
 npm install
 ```
-
 #### **Step 3: Setup PostgreSQL**
 ```bash
 # Install PostgreSQL
@@ -192,14 +180,12 @@ GRANT ALL PRIVILEGES ON DATABASE printkiosk TO printuser;
 # Run schema
 psql -U printuser -d printkiosk < schema.sql
 ```
-
 #### **Step 4: Configure Environment**
 ```bash
 # Create .env file
 cp .env.example .env
 nano .env
 ```
-
 ```env
 # Database
 DB_HOST=localhost
@@ -229,12 +215,12 @@ npm run dev
 
 # Production (with PM2)
 npm install -g pm2
-pm2 start index.js --name directprint-backend
+pm2 start index.js --name juspri-backend
 pm2 save
 pm2 startup
 ```
 
-**Full backend setup guide:** [ORACLE_VM_DEPLOYMENT_GUIDE.md](docs/ORACLE_VM_DEPLOYMENT_GUIDE.md)
+**Full backend setup guide:** [ORACLE_VM_DEPLOYMENT_GUIDE.md](phase_docs/docs/ORACLE_VM_DEPLOYMENT_GUIDE.md)
 
 ---
 
