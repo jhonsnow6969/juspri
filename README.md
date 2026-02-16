@@ -1,7 +1,10 @@
 # 🖨️ JusPri 
----
+
+
 A modern, cloud-based printing solution that enables users to print documents from any device to physical kiosk printers via QR codes and web interface.
+
 ---
+
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
