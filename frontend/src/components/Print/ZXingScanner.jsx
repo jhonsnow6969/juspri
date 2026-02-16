@@ -4,43 +4,42 @@ import { Loader2 } from 'lucide-react'
 
 export default function ZXingScanner({ active, onScan, onError }) {
   const videoRef = useRef(null)
-  const canvasRef = useRef(null)
   const controlsRef = useRef(null)
+  const readerRef = useRef(null)
+  const scannedRef = useRef(false)
+
   const [permissionAsked, setPermissionAsked] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(false)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(null)
-  const [detectionBox, setDetectionBox] = useState(null)
 
   useEffect(() => {
     if (!active || !permissionAsked) return
+    if (!videoRef.current) return
 
     setCameraLoading(true)
-    const reader = new BrowserMultiFormatReader()
+    setCameraError(null)
+    scannedRef.current = false
 
-    // Start scanning
+    const reader = new BrowserMultiFormatReader()
+    readerRef.current = reader
+
     reader
       .decodeFromVideoDevice(
-        undefined, // auto-select camera
+        { facingMode: 'environment' }, // 👈 important
         videoRef.current,
         (result, err) => {
-          if (result) {
-            // Get QR code position
-            const points = result.getResultPoints()
-            if (points && points.length >= 2) {
-              const xs = points.map(p => p.getX())
-              const ys = points.map(p => p.getY())
-              const box = {
-                x: Math.min(...xs),
-                y: Math.min(...ys),
-                width: Math.max(...xs) - Math.min(...xs),
-                height: Math.max(...ys) - Math.min(...ys)
-              }
-              setDetectionBox(box)
-              setTimeout(() => setDetectionBox(null), 500)
-            }
-            
-            onScan?.([{ rawValue: result.getText() }])
+          if (result && !scannedRef.current) {
+            scannedRef.current = true
+
+            const text = result.getText()
+            console.log('🔍 QR scanned:', text)
+
+            onScan?.([{ rawValue: text }])
+          }
+
+          if (err && err.name !== 'NotFoundException') {
+            console.warn('ZXing scan error:', err)
           }
         }
       )
@@ -48,92 +47,26 @@ export default function ZXingScanner({ active, onScan, onError }) {
         controlsRef.current = controls
         setCameraLoading(false)
         setCameraReady(true)
-        
-        // Make sure video is playing
-        if (videoRef.current) {
-          videoRef.current.play().catch(e => console.log('Video play error:', e))
-        }
       })
       .catch((err) => {
-        console.error('Camera error:', err)
+        console.error('Camera start error:', err)
         setCameraError(err)
         setCameraLoading(false)
         onError?.(err)
       })
 
     return () => {
+      scannedRef.current = false
+
       if (controlsRef.current) {
-        controlsRef.current.stop()
+        controlsRef.current.stop() // ✅ correct cleanup
         controlsRef.current = null
       }
     }
   }, [active, permissionAsked, onScan, onError])
 
-  // Draw detection box overlay
-  useEffect(() => {
-    if (!detectionBox || !canvasRef.current || !videoRef.current) return
+  // ---- UI STATES ----
 
-    const canvas = canvasRef.current
-    const video = videoRef.current
-    const ctx = canvas.getContext('2d')
-
-    // Match canvas size to video display size
-    const rect = video.getBoundingClientRect()
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    // Calculate scale factor
-    const scaleX = video.videoWidth / rect.width
-    const scaleY = video.videoHeight / rect.height
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    // Draw green box (scaled to match video resolution)
-    ctx.strokeStyle = '#10b981'
-    ctx.lineWidth = 4
-    ctx.strokeRect(
-      detectionBox.x,
-      detectionBox.y,
-      detectionBox.width,
-      detectionBox.height
-    )
-
-    // Draw corners
-    const cornerLength = 30
-    ctx.strokeStyle = '#10b981'
-    ctx.lineWidth = 6
-    
-    // Top-left
-    ctx.beginPath()
-    ctx.moveTo(detectionBox.x, detectionBox.y + cornerLength)
-    ctx.lineTo(detectionBox.x, detectionBox.y)
-    ctx.lineTo(detectionBox.x + cornerLength, detectionBox.y)
-    ctx.stroke()
-    
-    // Top-right
-    ctx.beginPath()
-    ctx.moveTo(detectionBox.x + detectionBox.width - cornerLength, detectionBox.y)
-    ctx.lineTo(detectionBox.x + detectionBox.width, detectionBox.y)
-    ctx.lineTo(detectionBox.x + detectionBox.width, detectionBox.y + cornerLength)
-    ctx.stroke()
-    
-    // Bottom-left
-    ctx.beginPath()
-    ctx.moveTo(detectionBox.x, detectionBox.y + detectionBox.height - cornerLength)
-    ctx.lineTo(detectionBox.x, detectionBox.y + detectionBox.height)
-    ctx.lineTo(detectionBox.x + cornerLength, detectionBox.y + detectionBox.height)
-    ctx.stroke()
-    
-    // Bottom-right
-    ctx.beginPath()
-    ctx.moveTo(detectionBox.x + detectionBox.width - cornerLength, detectionBox.y + detectionBox.height)
-    ctx.lineTo(detectionBox.x + detectionBox.width, detectionBox.y + detectionBox.height)
-    ctx.lineTo(detectionBox.x + detectionBox.width, detectionBox.y + detectionBox.height - cornerLength)
-    ctx.stroke()
-  }, [detectionBox])
-
-  // Enable Camera Button
   if (!permissionAsked) {
     return (
       <div className="aspect-square bg-muted/10 flex items-center justify-center">
@@ -147,46 +80,40 @@ export default function ZXingScanner({ active, onScan, onError }) {
     )
   }
 
-  // Loading State
   if (cameraLoading) {
     return (
       <div className="aspect-square bg-muted/10 flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-white" />
-        <p className="text-sm text-muted-foreground">Starting camera...</p>
+        <p className="text-sm text-muted-foreground">Starting camera…</p>
       </div>
     )
   }
 
-  // Error State
   if (cameraError) {
     return (
       <div className="aspect-square bg-red-500/10 flex items-center justify-center p-6 text-center">
         <div>
           <p className="text-sm text-red-500 mb-2">Camera error</p>
-          <p className="text-xs text-muted-foreground">Check permissions or device</p>
+          <p className="text-xs text-muted-foreground">
+            Allow camera permissions or use manual entry
+          </p>
         </div>
       </div>
     )
   }
 
-  // Camera Feed with Detection Overlay
   return (
-    <div className="relative aspect-square overflow-hidden rounded-xl">
+    <div className="relative aspect-square overflow-hidden rounded-xl bg-black">
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
           cameraReady ? 'opacity-100' : 'opacity-0'
         }`}
       />
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-      />
-      
-      {/* Scanning Hint */}
+
       {cameraReady && (
         <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
           <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-white">
