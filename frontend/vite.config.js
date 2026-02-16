@@ -14,12 +14,10 @@ export default defineConfig({
       manifest: {
         name: "JusPri",
         short_name: "JusPri",
-        description: "Scan QR codes to print instantly on nearby kiosks",
-
-        theme_color: "#0f172a",
-        background_color: "#0f172a",
+        description: "Scan QR, upload files, and print instantly",
+        theme_color: "#0a0a0a",
+        background_color: "#0a0a0a",
         display: "standalone",
-        scope: "/",
         start_url: "/",
 
         icons: [
@@ -27,14 +25,13 @@ export default defineConfig({
             src: "/favicon.svg",
             sizes: "any",
             type: "image/svg+xml",
-            purpose: "any maskable"
-          }
-        ]
+          },
+        ],
       },
 
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"]
-      }
+        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+      },
     }),
 
     viteImagemin({
@@ -42,8 +39,8 @@ export default defineConfig({
       optipng: { optimizationLevel: 7 },
       mozjpeg: { quality: 80 },
       pngquant: { quality: [0.8, 0.9] },
-      svgo: { plugins: [{ name: "removeViewBox" }] }
-    })
+      svgo: { plugins: [{ name: "removeViewBox" }] },
+    }),
   ],
 
   resolve: {
