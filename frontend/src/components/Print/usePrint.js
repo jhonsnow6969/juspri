@@ -86,76 +86,118 @@ export function usePrint() {
   // 3. Handlers
   // ==========================================
   const handleScan = useCallback((detectedCodes) => {
-    if (!detectedCodes || detectedCodes.length === 0) return;
-    
+    // ZXing sometimes sends undefined / empty arrays
+    if (!Array.isArray(detectedCodes) || detectedCodes.length === 0) {
+      return;
+    }
+  
+    const code = detectedCodes[0];
+    const rawValue = code?.rawValue;
+  
+    // Extra guard
+    if (!rawValue || typeof rawValue !== 'string') {
+      console.warn('⚠️ Invalid QR payload:', detectedCodes);
+      setScannerActive(true);
+      return;
+    }
+  
+    // Stop scanner once we have *something*
     setScannerActive(false);
-    const rawValue = detectedCodes[0].rawValue;
-    
+  
+    // 🔍 DEBUG — THIS IS IMPORTANT
+    console.log('🔍 QR Scanned:', rawValue);
+    console.log('🔍 Type:', typeof rawValue);
+    console.log('🔍 Length:', rawValue.length);
+  
     try {
       let printerData = {};
-      
-      // Check if it's a URL (for QR codes from pi-agent/qr-server)
-      if (rawValue.includes('http://') || rawValue.includes('https://')) {
-        try {
-          const url = new URL(rawValue);
-          const kioskId = url.searchParams.get('kiosk_id');
-          const location = url.searchParams.get('location');
-          const floor = url.searchParams.get('floor');
-          
-          if (!kioskId) {
-            addLog("QR URL missing kiosk_id parameter");
-            setScannerActive(true);
-            return;
-          }
-          
-          printerData = {
-            kiosk_id: kioskId,
-            location: location || undefined,
-            floor: floor || undefined
-          };
-          
-          addLog(`QR Decoded: Kiosk ${kioskId}`);
-          if (location) {
-            addLog(`Location: ${location}${floor ? `, Floor ${floor}` : ''}`);
-          }
-        } catch (urlError) {
-          addLog("Invalid URL format");
+  
+      // =========================
+      // 1️⃣ URL QR (recommended)
+      // =========================
+      if (rawValue.startsWith('http://') || rawValue.startsWith('https://')) {
+        console.log('📍 Detected as URL');
+  
+        const url = new URL(rawValue);
+        const kioskId = url.searchParams.get('kiosk_id');
+        const location = url.searchParams.get('location');
+        const floor = url.searchParams.get('floor');
+  
+        if (!kioskId) {
+          addLog('❌ QR URL missing kiosk_id');
           setScannerActive(true);
           return;
         }
-      }
-      // Check if it's JSON format
-      else if (rawValue.trim().startsWith('{')) {
-        printerData = JSON.parse(rawValue);
-        if (!printerData.kiosk_id) {
-          printerData.kiosk_id = printerData.ip || 'default_kiosk';
-        }
-        addLog(`QR Decoded: Kiosk ${printerData.kiosk_id}`);
-      }
-      // Treat as plain kiosk_id (manual entry or simple QR)
-      else {
-        printerData = { 
-          kiosk_id: rawValue.trim(),
-          ip: rawValue.trim(), 
-          port: 9100 
+  
+        printerData = {
+          kiosk_id: kioskId,
+          location: location || undefined,
+          floor: floor || undefined,
         };
-        addLog(`QR Decoded: Kiosk ${rawValue.trim()}`);
+  
+        addLog(`✅ QR Decoded: Kiosk ${kioskId}`);
+        if (location) {
+          addLog(`📍 Location: ${location}${floor ? `, Floor ${floor}` : ''}`);
+        }
+      }
+  
+      // =========================
+      // 2️⃣ JSON QR
+      // =========================
+      else if (rawValue.trim().startsWith('{')) {
+        console.log('📍 Detected as JSON');
+  
+        const parsed = JSON.parse(rawValue);
+  
+        printerData = {
+          kiosk_id: parsed.kiosk_id || parsed.ip || 'default_kiosk',
+          ...parsed,
+        };
+  
+        addLog(`✅ QR Decoded: Kiosk ${printerData.kiosk_id}`);
+      }
+  
+      // =========================
+      // 3️⃣ Plain text QR
+      // =========================
+      else {
+        console.log('📍 Detected as plain text');
+  
+        const value = rawValue.trim();
+  
+        printerData = {
+          kiosk_id: value,
+          ip: value,
+          port: 9100,
+        };
+  
+        addLog(`✅ QR Decoded: Kiosk ${value}`);
       }
   
       setConfig(printerData);
       setStatus('SCANNED');
-    } catch (e) {
-      console.error('QR decode error:', e);
-      addLog("Invalid QR Format");
+    } catch (err) {
+      console.error('❌ QR decode error:', err);
+      addLog('❌ Invalid QR format');
       setScannerActive(true);
     }
-  }, [addLog]);
+  }, [addLog, setConfig, setStatus]);
   
+  
+  // =========================
+  // Camera error handler
+  // =========================
   const handleScanError = useCallback((error) => {
-    console.warn('Camera error:', error);
-    setCameraError('Camera access denied. Allow permissions or use manual entry below.');
+    console.warn('📷 Camera error:', error);
+  
+    setCameraError(
+      'Camera not available. Allow permissions or use manual entry.'
+    );
+  
+    // Let user retry
+    setScannerActive(false);
   }, []);
-
+  
   const connectPrinter = useCallback(async () => {
     try {
       setStatus('CONNECTING');
