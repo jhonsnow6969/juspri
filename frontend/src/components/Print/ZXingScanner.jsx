@@ -17,10 +17,10 @@ export default function ZXingScanner({ active, onScan, onError }) {
         undefined, // auto-pick camera
         videoRef.current,
         (result, err) => {
-          if (result) {
-            onScan?.(result.getText())
+            if (result) {
+              onScan?.([{ rawValue: result.getText() }])  // ✅ Correct format
+            }
           }
-        }
       )
       .then((controls) => {
         controlsRef.current = controls
