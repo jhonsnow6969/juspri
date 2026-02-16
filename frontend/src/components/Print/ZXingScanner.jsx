@@ -2,6 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { Loader2, Camera } from 'lucide-react'
 
+// --- 1. THE AUDIO BEEP FUNCTION ---
+// Placed outside the component so it's only created once
+const playBeep = () => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+    
+    gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.15); 
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.15);
+  } catch (e) {
+    console.error("Audio beep failed", e);
+  }
+};
+
 export default function ZXingScanner({ active, onScan, onError }) {
   const videoRef = useRef(null)
   const controlsRef = useRef(null)
@@ -26,9 +53,14 @@ export default function ZXingScanner({ active, onScan, onError }) {
           videoRef.current,
           (result, err) => {
             if (result && isMounted) {
+              
+              // --- 2. THE UX FEEDBACK TRIGGER ---
+              playBeep(); // 🎵 Plays the beep
               if (window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(50)
+                window.navigator.vibrate(50) // 📳 Vibrates the phone
               }
+              // ----------------------------------
+              
               onScan?.([{ rawValue: result.getText() }])
             }
           }
@@ -125,7 +157,7 @@ export default function ZXingScanner({ active, onScan, onError }) {
       
       {/* VIEWFINDER OVERLAY */}
       {cameraReady && !cameraError && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center overflow-hidden">
           {/* This creates the dark background with a transparent hole in the middle */}
           <div className="relative w-[70%] h-[70%] rounded-xl shadow-[0_0_0_4000px_rgba(0,0,0,0.5)]">
             
@@ -135,9 +167,8 @@ export default function ZXingScanner({ active, onScan, onError }) {
             <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-xl" />
             <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-xl" />
             
-            {/* Optional: Add a subtle pulsing red line to look like a laser scanner */}
+            {/* Pulsing red scanner line */}
             <div className="absolute top-1/2 left-4 right-4 h-[1px] bg-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse" />
-            
           </div>
         </div>
       )}
