@@ -3,9 +3,9 @@ require('dotenv').config();
 const io = require('socket.io-client');
 const axios = require('axios');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');  // ← FIXED: Added execFile
 const path = require('path');
-const PDFDocument = require('pdf-lib').PDFDocument;
+const { PDFDocument } = require('pdf-lib');
 const qrcode = require('qrcode-terminal');
 
 // ==================== CONFIG ====================
@@ -37,7 +37,7 @@ checkConversionTools();
 const qrUrl = `${FRONTEND_URL}?kiosk_id=${KIOSK_ID}`;
 
 console.log('\n📱 Scan this QR code to connect:\n');
-qrcode.generate(KIOSK_ID, { small: true });
+qrcode.generate(qrUrl, { small: true });
 console.log(`\n🔗 Or visit: ${FRONTEND_URL}?kiosk_id=${KIOSK_ID}\n`);
 
 // ==================== SOCKET CONNECTION ====================
@@ -65,30 +65,26 @@ function checkConversionTools() {
   exec('libreoffice --version', (error, stdout) => {
     if (error) {
       console.warn('⚠ LibreOffice not found - document conversion disabled');
-      console.warn('   Install: sudo apt install libreoffice-writer libreoffice-core-nogui');
+      console.warn('   Install: sudo apt install libreoffice-writer');
     } else {
       console.log(`✓ LibreOffice: ${stdout.trim()}`);
     }
   });
   
-  // Check libvips
-  exec('vips --version', (error, stdout) => {
+  // Check ImageMagick
+  exec('convert --version', (error, stdout) => {
     if (error) {
-      console.warn('⚠ libvips not found - image processing disabled');
-      console.warn('   Install: sudo apt install libvips-tools');
+      // Try magick command (v7)
+      exec('magick --version', (error2, stdout2) => {
+        if (error2) {
+          console.warn('⚠ ImageMagick not found - image conversion disabled');
+          console.warn('   Install: sudo apt install imagemagick');
+        } else {
+          console.log(`✓ ImageMagick: ${stdout2.split('\n')[0]}`);
+        }
+      });
     } else {
-      const version = stdout.split('\n')[0];
-      console.log(`✓ libvips: ${version}`);
-    }
-  });
-  
-  // Check Ghostscript
-  exec('gs --version', (error, stdout) => {
-    if (error) {
-      console.warn('⚠ Ghostscript not found - PDF creation disabled');
-      console.warn('   Install: sudo apt install ghostscript');
-    } else {
-      console.log(`✓ Ghostscript: ${stdout.trim()}`);
+      console.log(`✓ ImageMagick: ${stdout.split('\n')[0]}`);
     }
   });
   
@@ -123,7 +119,8 @@ async function convertDocumentToPDF(inputPath) {
         reject(new Error(`LibreOffice conversion failed: ${stderr || error.message}`));
       } else {
         if (fs.existsSync(outputPath)) {
-          console.log(`   ✓ Converted to PDF`);
+          const outputSize = fs.statSync(outputPath).size;
+          console.log(`   ✓ Converted to PDF (${(outputSize / 1024).toFixed(1)} KB)`);
           resolve(outputPath);
         } else {
           reject(new Error('PDF output file not created'));
@@ -134,67 +131,108 @@ async function convertDocumentToPDF(inputPath) {
 }
 
 // ==================== IMAGE CONVERSION ====================
+/**
+ * Convert image (PNG/JPG/JPEG) → A4 PDF using ImageMagick
+ * Works with both ImageMagick v6 (convert) and v7 (magick)
+ * Auto-detects correct command path
+ */
 async function convertImageToPDF(inputPath) {
   return new Promise((resolve, reject) => {
-    const outputPath = inputPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf');
-    const tempProcessedImage = inputPath.replace(/\.(png|jpg|jpeg)$/i, '_processed.png');
-    
     console.log(`   🔄 Converting image to PDF...`);
-    
-    // Step 1: Process image with libvips (resize to fit A4)
-    // A4 at 150 DPI = 1240x1754 pixels (good quality, reasonable size)
-    const vipsCmd = `vipsthumbnail "${inputPath}" -s 1240x1754 -o "${tempProcessedImage}"`;
-    
-    console.log(`   Processing with libvips...`);
-    
-    exec(vipsCmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
-      if (error) {
-        // Fallback: Try without thumbnail (direct copy)
-        console.log(`   Trying direct conversion...`);
-        
-        // Use Ghostscript directly on original image
-        const gsCmd = `gs -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dPDFFitPage -sPAPERSIZE=a4 -sOutputFile="${outputPath}" "${inputPath}"`;
-        
-        exec(gsCmd, { timeout: CONVERSION_TIMEOUT }, (error2, stdout2, stderr2) => {
-          if (error2) {
-            console.error(`   ✗ Conversion failed: ${stderr2}`);
-            reject(new Error(`Image conversion failed: ${stderr2 || error2.message}`));
-          } else {
-            if (fs.existsSync(outputPath)) {
-              console.log(`   ✓ Converted to PDF`);
-              resolve(outputPath);
-            } else {
-              reject(new Error('PDF output file not created'));
-            }
+    console.log(`   Input: ${inputPath}`);
+
+    // Validate input file exists
+    if (!fs.existsSync(inputPath)) {
+      return reject(new Error("Input image does not exist"));
+    }
+
+    const ext = path.extname(inputPath).toLowerCase();
+    if (![".png", ".jpg", ".jpeg"].includes(ext)) {
+      return reject(new Error(`Unsupported image format: ${ext}`));
+    }
+
+    const outputPath = inputPath.replace(ext, ".pdf");
+
+    // ImageMagick command arguments (same for both v6 and v7)
+    const args = [
+      inputPath,
+      "-resize", "1240x1754>",      // Fit to A4 at 150 DPI, don't upscale
+      "-gravity", "center",          // Center the image
+      "-background", "white",        // White background
+      "-extent", "1240x1754",        // A4 canvas at 150 DPI
+      "-units", "PixelsPerInch",
+      "-density", "150",             // 150 DPI for good print quality
+      outputPath
+    ];
+
+    // Try ImageMagick v7 first (magick command)
+    const tryMagickV7 = () => {
+      console.log(`   🔍 Trying ImageMagick v7 (magick)...`);
+      
+      exec(`which magick`, (whichError) => {
+        if (whichError) {
+          console.log(`   ⚠ ImageMagick v7 not found, trying v6...`);
+          return tryMagickV6();
+        }
+
+        // Found magick, use it
+        execFile('magick', args, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
+          if (stderr && stderr.trim()) {
+            console.warn(`   ⚠ ImageMagick stderr: ${stderr.trim()}`);
           }
+
+          if (error) {
+            console.error(`   ✗ ImageMagick v7 failed: ${error.message}`);
+            return tryMagickV6();
+          }
+
+          if (!fs.existsSync(outputPath)) {
+            console.error(`   ✗ PDF output not created`);
+            return tryMagickV6();
+          }
+
+          const outputSize = fs.statSync(outputPath).size;
+          console.log(`   ✓ Converted to PDF (${(outputSize / 1024).toFixed(1)} KB)`);
+          resolve(outputPath);
         });
-        return;
-      }
-      
-      // Step 2: Convert processed image to PDF with Ghostscript
-      console.log(`   Creating PDF with Ghostscript...`);
-      
-      const gsCmd = `gs -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dPDFFitPage -sPAPERSIZE=a4 -sOutputFile="${outputPath}" "${tempProcessedImage}"`;
-      
-      exec(gsCmd, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
-        // Clean up temporary processed image
-        if (fs.existsSync(tempProcessedImage)) {
-          fs.unlinkSync(tempProcessedImage);
-        }
-        
-        if (error) {
-          console.error(`   ✗ PDF creation failed: ${stderr}`);
-          reject(new Error(`Ghostscript conversion failed: ${stderr || error.message}`));
-        } else {
-          if (fs.existsSync(outputPath)) {
-            console.log(`   ✓ Converted to PDF`);
-            resolve(outputPath);
-          } else {
-            reject(new Error('PDF output file not created'));
-          }
-        }
       });
-    });
+    };
+
+    // Try ImageMagick v6 (convert command)
+    const tryMagickV6 = () => {
+      console.log(`   🔍 Trying ImageMagick v6 (convert)...`);
+      
+      exec(`which convert`, (whichError) => {
+        if (whichError) {
+          return reject(new Error(
+            'ImageMagick not found. Install with: sudo apt install imagemagick'
+          ));
+        }
+
+        // Found convert, use it
+        execFile('convert', args, { timeout: CONVERSION_TIMEOUT }, (error, stdout, stderr) => {
+          if (stderr && stderr.trim()) {
+            console.warn(`   ⚠ ImageMagick stderr: ${stderr.trim()}`);
+          }
+
+          if (error) {
+            console.error(`   ✗ ImageMagick v6 failed: ${error.message}`);
+            return reject(new Error(`Image conversion failed: ${error.message}`));
+          }
+
+          if (!fs.existsSync(outputPath)) {
+            return reject(new Error('PDF output not created by ImageMagick'));
+          }
+
+          const outputSize = fs.statSync(outputPath).size;
+          console.log(`   ✓ Converted to PDF (${(outputSize / 1024).toFixed(1)} KB)`);
+          resolve(outputPath);
+        });
+      });
+    };
+
+    // Start conversion
+    tryMagickV7();
   });
 }
 
@@ -300,10 +338,10 @@ async function pollForJobs() {
 async function handlePolledJob(job) {
   const { job_id, filename, pages, file_data } = job;
   
-  console.log(`📄 Processing Job`);
+  console.log(`\n📄 Processing Job`);
   console.log(`   ID: ${job_id}`);
   console.log(`   File: ${filename}`);
-  console.log(`   Pages: ${pages}`);
+  console.log(`   Expected Pages: ${pages}`);
   
   const tempFile = path.join(TEMP_DIR, `${job_id}_${filename}`);
   
@@ -311,7 +349,7 @@ async function handlePolledJob(job) {
     // Decode and save file
     const fileBuffer = Buffer.from(file_data, 'base64');
     fs.writeFileSync(tempFile, fileBuffer);
-    console.log('   ✓ File saved locally');
+    console.log(`   ✓ File saved locally (${(fileBuffer.length / 1024).toFixed(1)} KB)`);
     
     // Detect file type
     const fileType = getFileType(filename);
@@ -363,7 +401,7 @@ async function handlePolledJob(job) {
     }
     
   } catch (e) {
-    console.error('✗ Job processing error:', e);
+    console.error('✗ Job processing error:', e.message);
     
     if (socket.connected) {
       socket.emit('print_complete', { 
@@ -410,7 +448,7 @@ async function executePrint(job_id) {
     
     exec(printCommand, (error, stdout, stderr) => {
       if (error) {
-        console.error('✗ Print failed:', stderr);
+        console.error('✗ Print failed:', stderr || error.message);
         
         if (socket.connected) {
           socket.emit('print_complete', { 
@@ -421,7 +459,7 @@ async function executePrint(job_id) {
         }
       } else {
         console.log('✓ Print job sent to CUPS');
-        console.log(stdout);
+        console.log(stdout.trim());
         
         if (socket.connected) {
           socket.emit('print_complete', { 
@@ -440,11 +478,15 @@ async function executePrint(job_id) {
       
       setTimeout(() => {
         // Delete both original and converted files
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        if (originalPath && originalPath !== filePath && fs.existsSync(originalPath)) {
-          fs.unlinkSync(originalPath);
+        try {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          if (originalPath && originalPath !== filePath && fs.existsSync(originalPath)) {
+            fs.unlinkSync(originalPath);
+          }
+          console.log(`   🗑️  Cleaned up temp files`);
+        } catch (cleanupError) {
+          console.warn(`   ⚠ Cleanup error: ${cleanupError.message}`);
         }
-        console.log(`   🗑️  Cleaned up temp files`);
       }, 5000);
       
       // Check if more jobs are waiting
@@ -456,7 +498,7 @@ async function executePrint(job_id) {
     });
     
   } catch (e) {
-    console.error('✗ Print execution error:', e);
+    console.error('✗ Print execution error:', e.message);
     
     if (socket.connected) {
       socket.emit('print_complete', { 
@@ -534,7 +576,7 @@ setInterval(() => {
       printer_status: printerName ? 'ready' : 'no_printer',
       current_job: currentJob,
       pending_jobs: pendingJobs.size,
-      memory: process.memoryUsage().heapUsed / 1024 / 1024,
+      memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       poll_count: pollCount,
       jobs_fetched_today: jobsFetchedToday,
       conversions_today: conversionsToday,
