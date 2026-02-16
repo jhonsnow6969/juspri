@@ -4,29 +4,23 @@ import { Loader2 } from 'lucide-react'
 
 export default function ZXingScanner({ active, onScan, onError }) {
   const videoRef = useRef(null)
-  const readerRef = useRef(null)
   const controlsRef = useRef(null)
-
+  
   const [permissionAsked, setPermissionAsked] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [cameraLoading, setCameraLoading] = useState(false)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState(null)
 
   useEffect(() => {
-    if (!active || !permissionAsked) return
-    if (!videoRef.current) return
+    // Only run if active, permission asked, and we have the video element mounted
+    if (!active || !permissionAsked || !videoRef.current) return
 
-    let cancelled = false
-    setLoading(true)
-    setError(null)
+    setCameraLoading(true)
+    const reader = new BrowserMultiFormatReader()
 
-    // Create reader ONCE
-    if (!readerRef.current) {
-      readerRef.current = new BrowserMultiFormatReader()
-    }
-
-    readerRef.current
+    reader
       .decodeFromVideoDevice(
-        undefined, // auto camera
+        undefined,
         videoRef.current,
         (result, err) => {
           if (result) {
@@ -35,20 +29,18 @@ export default function ZXingScanner({ active, onScan, onError }) {
         }
       )
       .then((controls) => {
-        if (cancelled) return
         controlsRef.current = controls
-        setLoading(false)
+        setCameraLoading(false)
+        setCameraReady(true)
       })
       .catch((err) => {
-        if (cancelled) return
-        console.error('ZXing camera error:', err)
-        setError(err)
-        setLoading(false)
+        console.error(err)
+        setCameraError(err)
+        setCameraLoading(false)
         onError?.(err)
       })
 
     return () => {
-      cancelled = true
       if (controlsRef.current) {
         controlsRef.current.stop()
         controlsRef.current = null
@@ -56,14 +48,13 @@ export default function ZXingScanner({ active, onScan, onError }) {
     }
   }, [active, permissionAsked, onScan, onError])
 
-  // ---- UI STATES ----
-
+  // 1. Initial State: Ask for permission
   if (!permissionAsked) {
     return (
-      <div className="aspect-square bg-muted/10 flex items-center justify-center">
+      <div className="aspect-square bg-muted/10 flex items-center justify-center rounded-xl">
         <button
           onClick={() => setPermissionAsked(true)}
-          className="px-6 py-3 rounded-xl bg-white text-black hover:bg-neutral-200 font-medium transition"
+          className="px-6 py-3 rounded-xl bg-white text-black hover:bg-neutral-200 font-medium transition-all hover:scale-105 shadow-lg"
         >
           📷 Enable Camera
         </button>
@@ -71,33 +62,37 @@ export default function ZXingScanner({ active, onScan, onError }) {
     )
   }
 
-  if (loading) {
-    return (
-      <div className="aspect-square bg-muted/10 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <p className="text-xs text-muted-foreground">Starting camera…</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="aspect-square bg-red-500/10 flex items-center justify-center p-4 text-center">
-        <p className="text-xs text-red-500">
-          Camera not available.<br />
-          Check permissions or device.
-        </p>
-      </div>
-    )
-  }
-
+  // 2. Camera State: Always render the video, use overlays for Loading/Error
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      muted
-      playsInline
-      className="w-full aspect-square object-cover rounded-xl"
-    />
+    <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-muted/10 border border-border">
+      
+      {/* Loading Overlay */}
+      {cameraLoading && !cameraError && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/40 backdrop-blur-sm">
+          <Loader2 className="w-8 h-8 animate-spin text-white" />
+          <p className="text-sm text-white font-medium">Starting camera...</p>
+        </div>
+      )}
+
+      {/* Error Overlay */}
+      {cameraError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-950/80 p-6 text-center backdrop-blur-sm">
+          <div>
+            <p className="text-sm text-red-400 font-bold mb-2">Camera Error</p>
+            <p className="text-xs text-red-200">Please check camera permissions in your browser settings.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Video Feed (Always in DOM so the ref works) */}
+      <video
+        ref={videoRef}
+        className={`w-full h-full object-cover transition-opacity duration-700 ease-in-out ${
+          cameraReady && !cameraError ? 'opacity-100' : 'opacity-0'
+        }`}
+        muted
+        playsInline
+      />
+    </div>
   )
 }
