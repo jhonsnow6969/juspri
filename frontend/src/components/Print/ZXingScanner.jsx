@@ -18,16 +18,16 @@ export default function ZXingScanner({ active, onScan, onError }) {
     setCameraLoading(true)
     const reader = new BrowserMultiFormatReader()
 
+    // Start scanning
     reader
       .decodeFromVideoDevice(
-        undefined,
+        undefined, // auto-select camera
         videoRef.current,
         (result, err) => {
           if (result) {
             // Get QR code position
             const points = result.getResultPoints()
             if (points && points.length >= 2) {
-              // Calculate bounding box
               const xs = points.map(p => p.getX())
               const ys = points.map(p => p.getY())
               const box = {
@@ -37,8 +37,6 @@ export default function ZXingScanner({ active, onScan, onError }) {
                 height: Math.max(...ys) - Math.min(...ys)
               }
               setDetectionBox(box)
-              
-              // Flash detection
               setTimeout(() => setDetectionBox(null), 500)
             }
             
@@ -50,9 +48,14 @@ export default function ZXingScanner({ active, onScan, onError }) {
         controlsRef.current = controls
         setCameraLoading(false)
         setCameraReady(true)
+        
+        // Make sure video is playing
+        if (videoRef.current) {
+          videoRef.current.play().catch(e => console.log('Video play error:', e))
+        }
       })
       .catch((err) => {
-        console.error(err)
+        console.error('Camera error:', err)
         setCameraError(err)
         setCameraLoading(false)
         onError?.(err)
@@ -64,7 +67,7 @@ export default function ZXingScanner({ active, onScan, onError }) {
         controlsRef.current = null
       }
     }
-  }, [active, permissionAsked])
+  }, [active, permissionAsked, onScan, onError])
 
   // Draw detection box overlay
   useEffect(() => {
@@ -74,14 +77,19 @@ export default function ZXingScanner({ active, onScan, onError }) {
     const video = videoRef.current
     const ctx = canvas.getContext('2d')
 
-    // Match canvas size to video
+    // Match canvas size to video display size
+    const rect = video.getBoundingClientRect()
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
+
+    // Calculate scale factor
+    const scaleX = video.videoWidth / rect.width
+    const scaleY = video.videoHeight / rect.height
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw green box
+    // Draw green box (scaled to match video resolution)
     ctx.strokeStyle = '#10b981'
     ctx.lineWidth = 4
     ctx.strokeRect(
@@ -91,8 +99,8 @@ export default function ZXingScanner({ active, onScan, onError }) {
       detectionBox.height
     )
 
-    // Draw corners for extra style
-    const cornerLength = 20
+    // Draw corners
+    const cornerLength = 30
     ctx.strokeStyle = '#10b981'
     ctx.lineWidth = 6
     
@@ -163,27 +171,29 @@ export default function ZXingScanner({ active, onScan, onError }) {
 
   // Camera Feed with Detection Overlay
   return (
-    <div className="relative aspect-square">
+    <div className="relative aspect-square overflow-hidden rounded-xl">
       <video
         ref={videoRef}
-        className={`w-full h-full object-cover rounded-xl transition-opacity duration-500 ${
+        autoPlay
+        playsInline
+        muted
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
           cameraReady ? 'opacity-100' : 'opacity-0'
         }`}
-        muted
-        playsInline
       />
       <canvas
         ref={canvasRef}
-        className="absolute top-0 left-0 w-full h-full pointer-events-none"
-        style={{ imageRendering: 'crisp-edges' }}
+        className="absolute inset-0 w-full h-full pointer-events-none"
       />
       
       {/* Scanning Hint */}
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-        <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-white">
-          Position QR code in frame
+      {cameraReady && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-full text-xs text-white">
+            Position QR code in frame
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
