@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
-import { Printer, History, LogOut, User, Menu, X } from 'lucide-react';
+import { Printer, History, LogOut, User, Menu, X, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function DashboardLayout({ children, activeTab = 'print' }) {
@@ -150,6 +150,17 @@ export function DashboardLayout({ children, activeTab = 'print' }) {
                                 </motion.button>
                             );
                         })}
+
+                        {/* ── NEW: FAQ link ── */}
+                        <motion.button
+                            whileHover={{ scale: 1.02, x: 4 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => navigate('/faq')}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
+                        >
+                            <HelpCircle className="w-5 h-5" />
+                            <span className="font-medium">Help & FAQ</span>
+                        </motion.button>
                     </nav>
 
                     {/* Logout */}
@@ -239,6 +250,15 @@ export function DashboardLayout({ children, activeTab = 'print' }) {
                                             </button>
                                         );
                                     })}
+
+                                    {/* ── NEW: FAQ link ── */}
+                                    <button
+                                        onClick={() => { navigate('/faq'); setSidebarOpen(false); }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                        <HelpCircle className="w-5 h-5" />
+                                        <span className="font-medium">Help & FAQ</span>
+                                    </button>
                                 </nav>
 
                                 {/* Logout */}

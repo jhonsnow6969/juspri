@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import { AuthProvider } from "./components/AuthProvider";
@@ -6,6 +7,7 @@ import { DashboardLayout } from "./components/Dashboard/DashboardLayout";
 import { Login } from "./components/Login";
 import { History } from "./components/Dashboard/History";
 import { PrintInterface } from "./components/Print/PrintInterface";
+import { FAQPage } from "./components/FAQPage";
 
 function App() {
   return (
@@ -13,6 +15,9 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+
+          {/* Public FAQ route - no auth required */}
+          <Route path="/faq" element={<FAQPage />} />
 
           <Route
             path="/"

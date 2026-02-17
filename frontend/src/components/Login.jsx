@@ -293,6 +293,23 @@ export function Login() {
                         <p className="text-xs text-muted-foreground mt-1">Always on</p>
                     </motion.div>
                 </motion.div>
+
+                {/* ── NEW: Footer link ── */}
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.9 }}
+                    className="mt-6 text-center text-xs text-muted-foreground/40"
+                >
+                    © {new Date().getFullYear()} JusPri ·{' '}
+                    <button
+                        onClick={() => navigate('/faq')}
+                        className="hover:text-muted-foreground transition-colors underline underline-offset-2"
+                    >
+                        FAQ & Support
+                    </button>
+                </motion.p>
+
             </motion.div>
         </div>
     );
