@@ -31,7 +31,6 @@ export function usePrint() {
     // 2. Core Helper Functions 
     // (Moved UP so they exist before they are called)
     // ==========================================
-    console.log("API:", import.meta.env.VITE_API_URL);
 
     // Helper: Connect to printer (used by status check and manual connect)
     const connectPrinterAfterStatusCheck = useCallback(async (kioskId) => {
