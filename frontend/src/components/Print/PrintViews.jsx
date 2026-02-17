@@ -4,9 +4,9 @@ import {
   IndianRupee, CheckCircle, Printer 
 } from 'lucide-react';
 import { getFileIcon, getFileExt } from './printUtils';
-
-// Replace with your actual import paths for Button and Scanner
-import { Button } from '@/components/ui/button'; 
+import { AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
 import ZXingScanner from './ZXingScanner'
 
 export function QRScannerView({ 
@@ -98,6 +98,219 @@ export function QRScannerView({
     </div>
   );
 }
+
+
+// ─── VIEW: Checking Status (shown immediately after QR scan) ─
+export function StatusCheckView() {
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6 text-center py-8"
+        >
+            {/* Animated printer icon */}
+            <div className="relative mx-auto w-20 h-20">
+                <motion.div
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center"
+                >
+                    <Printer className="w-10 h-10 text-white" />
+                </motion.div>
+                {/* Spinning ring around the icon */}
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    className="absolute inset-0 rounded-2xl border-2 border-transparent border-t-white/40"
+                />
+            </div>
+
+            <div>
+                <p className="text-lg font-semibold text-foreground mb-1">
+                    Checking Printer Status...
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Verifying kiosk is ready
+                </p>
+            </div>
+
+            {/* Animated dots */}
+            <div className="flex justify-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                    <motion.div
+                        key={i}
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                        className="w-2 h-2 rounded-full bg-white/50"
+                    />
+                ))}
+            </div>
+        </motion.div>
+    );
+}
+
+
+// ─── VIEW: Printer Error (hard block) ───────────────────────
+export function PrinterErrorView({ printerStatusResult, resetFlow }) {
+
+    // Map detail codes to user-friendly messages
+    const getErrorInfo = (detail) => {
+        const errors = {
+            'media-empty':      { title: 'Out of Paper',     desc: 'This printer has run out of paper. Please try another kiosk.',         icon: '📄' },
+            'media-low':        { title: 'Low Paper',        desc: 'This printer is almost out of paper. Please try another kiosk.',        icon: '📄' },
+            'toner-empty':      { title: 'Out of Ink/Toner', desc: 'This printer has run out of ink or toner. Please try another kiosk.',   icon: '🖨️' },
+            'cover-open':       { title: 'Cover Open',       desc: 'This printer\'s cover is open. Please contact staff.',                  icon: '⚠️' },
+            'stopped':          { title: 'Printer Stopped',  desc: 'This printer has stopped. Please contact staff.',                       icon: '🛑' },
+            'offline':          { title: 'Printer Offline',  desc: 'This printer is not responding. Please try another kiosk.',             icon: '📡' },
+            'kiosk_offline':    { title: 'Kiosk Offline',    desc: 'This kiosk appears to be offline. Please try another kiosk or scan again shortly.', icon: '📡' },
+        };
+        return errors[detail] || { title: 'Printer Error', desc: 'This printer has an issue. Please contact staff or try another kiosk.', icon: '⚠️' };
+    };
+
+    const detail = printerStatusResult?.printer_status_detail;
+    const errorInfo = getErrorInfo(detail);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="space-y-5 py-4"
+        >
+            {/* Error header */}
+            <div className="text-center">
+                <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                    className="text-5xl mb-4"
+                >
+                    {errorInfo.icon}
+                </motion.div>
+                <h3 className="text-xl font-bold text-foreground mb-2">
+                    {errorInfo.title}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                    {errorInfo.desc}
+                </p>
+            </div>
+
+            {/* Error box */}
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                    <XCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                    <div>
+                        <p className="text-sm font-medium text-red-400">Upload Blocked</p>
+                        <p className="text-xs text-red-400/70 mt-0.5">
+                            To protect your payment, we've prevented file upload until this issue is resolved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="space-y-2">
+                <Button
+                    onClick={resetFlow}
+                    className="w-full bg-white text-black hover:bg-neutral-200 font-semibold py-5 transition-colors"
+                >
+                    <RefreshCw className="mr-2 w-4 h-4" />
+                    Scan a Different Kiosk
+                </Button>
+
+                <Button
+                    variant="ghost"
+                    onClick={resetFlow}
+                    className="w-full text-muted-foreground hover:text-foreground hover:bg-white/5 text-sm"
+                >
+                    ← Back to Scanner
+                </Button>
+            </div>
+        </motion.div>
+    );
+}
+
+
+// ─── VIEW: Printer Warning Dialog (soft warning) ─────────────
+export function PrinterWarningView({ proceedDespiteWarning, resetFlow }) {
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-5 py-2"
+        >
+            {/* Warning icon */}
+            <div className="text-center">
+                <motion.div
+                    animate={{ rotate: [-3, 3, -3] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    className="inline-block text-5xl mb-4"
+                >
+                    ⚠️
+                </motion.div>
+                <h3 className="text-xl font-bold text-foreground mb-2">
+                    Quick Check Needed
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                    We couldn't automatically verify this printer's status. 
+                    This is common with some printer models.
+                </p>
+            </div>
+
+            {/* Checklist */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-medium text-yellow-400 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    Please take a quick look at the printer:
+                </p>
+                <ul className="space-y-2">
+                    {[
+                        'Printer is turned on and not in sleep mode',
+                        'Paper tray has paper',
+                        'No error lights are blinking',
+                        'No paper jams visible'
+                    ].map((item, i) => (
+                        <motion.li
+                            key={i}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.08 }}
+                            className="flex items-start gap-2 text-xs text-yellow-400/80"
+                        >
+                            <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-yellow-500/60" />
+                            {item}
+                        </motion.li>
+                    ))}
+                </ul>
+            </div>
+
+            {/* Action buttons */}
+            <div className="space-y-2">
+                {/* Primary: Proceed */}
+                <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                    <Button
+                        onClick={proceedDespiteWarning}
+                        className="w-full bg-white text-black hover:bg-neutral-200 font-bold py-5 transition-colors"
+                    >
+                        <CheckCircle className="mr-2 w-5 h-5" />
+                        Looks Good, Proceed
+                    </Button>
+                </motion.div>
+
+                {/* Secondary: Scan different kiosk */}
+                <Button
+                    variant="ghost"
+                    onClick={resetFlow}
+                    className="w-full text-muted-foreground hover:text-foreground hover:bg-white/5 text-sm"
+                >
+                    ← Scan a Different Kiosk
+                </Button>
+            </div>
+        </motion.div>
+    );
+}
+
+
+
 
 export function ConnectView({ config, status, connectPrinter, resetFlow }) {
   return (

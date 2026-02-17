@@ -1,31 +1,39 @@
+// frontend/src/components/Print/PrintInterface.jsx
+// Phase 1: Smart Printer Verification - full component ready to drop in.
+// - Shows new status-check / printer-error / printer-warning views
+// - Keeps existing flow for connect/upload/payment/printing/completed
+// - Expects PrintViews to export the new views listed below
+
 import React from 'react';
 import { Printer } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePrint } from './usePrint';
-
-// ✅ import helpers from ONE place
 import { getFileExt, getFileIcon } from './printUtils';
 
-import { 
-  QRScannerView, 
-  ConnectView, 
-  FileUploadView, 
-  PaymentView, 
-  PrintingView, 
+import {
+  QRScannerView,
+  ConnectView,
+  FileUploadView,
+  PaymentView,
+  PrintingView,
   CompletedView,
-  LogTerminal 
+  LogTerminal,
+  // Phase 1 new views — make sure these exist in ./PrintViews
+  StatusCheckView,
+  PrinterErrorView,
+  PrinterWarningView,
 } from './PrintViews';
 
 export function PrintInterface() {
   const printState = usePrint();
   const { status, logs } = printState;
 
-  // Pass helpers + hook state to views
+  // Pass hook state + helpers down to child views
   const viewProps = {
     ...printState,
     getFileExt,
-    getFileIcon
+    getFileIcon,
   };
 
   return (
@@ -41,33 +49,54 @@ export function PrintInterface() {
         </CardHeader>
 
         <CardContent className="pt-6 space-y-4">
-          
-          {/* VIEW 1: Scanner */}
+          {/* VIEW: QR Scanner */}
           {status === 'IDLE' && <QRScannerView {...viewProps} />}
 
-          {/* VIEW 2: Connect */}
+          {/* VIEW: Checking kiosk / printer status (Phase 1) */}
+          {status === 'CHECKING_STATUS' && <StatusCheckView {...viewProps} />}
+
+          {/* VIEW: Hard printer error (block) */}
+          {status === 'PRINTER_ERROR' && (
+            <PrinterErrorView
+              printerStatusResult={printState.printerStatusResult}
+              resetFlow={printState.resetFlow}
+            />
+          )}
+
+          {/* VIEW: Soft printer warning (user can proceed or rescan) */}
+          {status === 'PRINTER_WARNING' && (
+            <PrinterWarningView
+              proceedDespiteWarning={printState.proceedDespiteWarning}
+              rescanQR={printState.rescanQR}
+              printerStatusResult={printState.printerStatusResult}
+            />
+          )}
+
+          {/* VIEW: Manual / fallback connect (shown after scan if user chooses or on connect errors) */}
           {(status === 'SCANNED' || status === 'CONNECTING' || status === 'ERROR') && (
             <ConnectView {...viewProps} />
           )}
 
-          {/* VIEW 3: Upload */}
+          {/* VIEW: File upload / calculation */}
           {(status === 'CONNECTED' || status === 'CALCULATING') && (
             <FileUploadView {...viewProps} />
           )}
 
-          {/* VIEW 4: Payment */}
+          {/* VIEW: Payment */}
           {status === 'PAYMENT' && <PaymentView {...viewProps} />}
 
-          {/* VIEW 5: Printing */}
-          {status === 'PRINTING' && <PrintingView />}
+          {/* VIEW: Printing progress */}
+          {status === 'PRINTING' && <PrintingView {...viewProps} />}
 
-          {/* VIEW 6: Done */}
+          {/* VIEW: Completed / success */}
           {status === 'COMPLETED' && <CompletedView {...viewProps} />}
 
-          {/* Logs */}
+          {/* Logs - always visible */}
           <LogTerminal logs={logs} />
         </CardContent>
       </Card>
     </div>
   );
 }
+
+export default PrintInterface;

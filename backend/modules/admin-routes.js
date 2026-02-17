@@ -59,4 +59,18 @@ router.get('/admin/jobs', verifyToken, isAdmin, async (req, res) => {
     }
 });
 
+router.post('/connect', async (req, res) => {
+    try {
+        const stats = await db.getStats();
+        res.json({
+            ok: true,
+            message: 'Backend reachable',
+            kiosks: stats.onlineKiosks
+        });
+    } catch (err) {
+        console.error('[CONNECT] failed:', err);
+        res.status(503).json({ error: 'Service unavailable' });
+    }
+});
+
 module.exports = router;

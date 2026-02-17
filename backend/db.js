@@ -486,7 +486,7 @@ module.exports = {
     // Utility
     testConnection,
     closePool,
-    
+    query: (text, params) => pool.query(text, params),
     // Direct pool access (for custom queries)
     pool
 };
