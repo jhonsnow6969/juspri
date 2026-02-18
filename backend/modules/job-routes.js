@@ -45,14 +45,41 @@ router.post('/jobs/create', verifyToken, upload.single('file'), async (req, res)
         let pages = 1;
         
         if (ext === '.pdf') {
-            try { pages = await countPDFPages(req.file.path); } 
-            catch (e) { pages = Math.ceil(req.file.size / (1024 * 100)); }
+            try { 
+                pages = await countPDFPages(req.file.path); 
+            } catch (e) { 
+                pages = Math.ceil(req.file.size / (1024 * 100)); 
+            }
         } else if (!['.png', '.jpg', '.jpeg'].includes(ext)) {
             pages = Math.max(1, Math.ceil(req.file.size / (1024 * 5)));
         }
-        
+
         const kiosk = await db.getKiosk(kiosk_id);
-        const pricePerPage = kiosk?.price_per_page || PRICE_PER_PAGE;
+        if (!kiosk) {
+            fs.unlinkSync(req.file.path);
+            return res.status(404).json({ error: 'Kiosk not found' });
+        }
+
+        // ===== PHASE 3: PAPER AVAILABILITY CHECK =====
+        const paperAvailable = kiosk.current_paper_count || 0;
+
+        if (paperAvailable < pages) {
+            console.warn(
+                `[Paper Check] Kiosk ${kiosk_id} has ${paperAvailable}, job needs ${pages}`
+            );
+
+            fs.unlinkSync(req.file.path);
+
+            return res.status(400).json({
+                error: 'INSUFFICIENT_PAPER',
+                message: `This kiosk has only ${paperAvailable} pages left. Your document requires ${pages} pages.`,
+                paperAvailable,
+                paperNeeded: pages
+            });
+        }
+        // ============================================
+
+        const pricePerPage = kiosk.price_per_page || PRICE_PER_PAGE;
         const totalCost = pages * pricePerPage;
         const jobId = generateJobId();
         
@@ -206,5 +233,31 @@ router.get('/jobs/:job_id/status', verifyToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to get job status' });
     }
 });
+
+// Get User Profile (role lookup) - instrumented for debugging
+router.get('/user/profile', verifyToken, async (req, res) => {
+    try {
+      const user = await db.getUser(req.user.uid);
+  
+      if (!user) {
+        return res.json({
+          uid: req.user.uid,
+          email: req.user.email,
+          role: 'user'
+        });
+      }
+  
+      res.json({
+        uid: user.id,
+        email: user.email,
+        role: user.role || 'user'
+      });
+    } catch (error) {
+      console.error('[User Profile] Error:', error);
+      res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+  });
+  
+
 
 module.exports = router;

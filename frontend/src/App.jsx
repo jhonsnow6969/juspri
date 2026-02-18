@@ -8,6 +8,8 @@ import { Login } from "./components/Login";
 import { History } from "./components/Dashboard/History";
 import { PrintInterface } from "./components/Print/PrintInterface";
 import { FAQPage } from "./components/FAQPage";
+import { AdminRoute } from "./components/Admin/AdminRoute";
+import { AdminDashboard } from "./components/Admin/Admindashboard";
 
 function App() {
   return (
@@ -38,6 +40,20 @@ function App() {
                   <History />
                 </DashboardLayout>
               </ProtectedRoute>
+            }
+          />
+
+          {/* Admin route */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <ProtectedRoute>
+                  <DashboardLayout activeTab="admin">
+                    <AdminDashboard />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              </AdminRoute>
             }
           />
 

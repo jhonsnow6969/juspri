@@ -1,4 +1,3 @@
-// frontend/src/components/AuthProvider.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import { 
     onAuthStateChanged, 
@@ -19,6 +18,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
+    const [role, setRole] = useState(null); // <--- ADDED: State for user role
     const [token, setToken] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             try {
                 if (firebaseUser) {
-                    // User is signed in
+                    // 1. User is signed in - Basic setup
                     const idToken = await firebaseUser.getIdToken();
                     
                     setUser({
@@ -40,14 +40,35 @@ export function AuthProvider({ children }) {
                     });
                     
                     setToken(idToken);
-                    
-                    // Store token in localStorage for persistence
                     localStorage.setItem('authToken', idToken);
-                    
-                    console.log('✅ User authenticated:', firebaseUser.email);
+
+                    // 2. ===== Fetch user role from backend =====
+                    try {
+                        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                        const response = await fetch(`${apiUrl}/api/user/profile`, {
+                            headers: {
+                                'Authorization': `Bearer ${idToken}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            setRole(data.role || 'user');
+                            console.log(`✅ User authenticated: ${firebaseUser.email} [Role: ${data.role || 'user'}]`);
+                        } else {
+                            console.warn('⚠️ Could not fetch role, defaulting to "user"');
+                            setRole('user'); 
+                        }
+                    } catch (fetchError) {
+                        console.error('Failed to fetch user role:', fetchError);
+                        setRole('user'); // Fallback to basic user if backend fails
+                    }
+                    // ========================================
+
                 } else {
                     // User is signed out
                     setUser(null);
+                    setRole(null); // <--- Reset role
                     setToken(null);
                     localStorage.removeItem('authToken');
                     console.log('ℹ️ User signed out');
@@ -95,28 +116,13 @@ export function AuthProvider({ children }) {
             setLoading(true);
             
             const result = await signInWithPopup(auth, googleProvider);
-            const idToken = await result.user.getIdToken();
-            
-            setUser({
-                uid: result.user.uid,
-                email: result.user.email,
-                displayName: result.user.displayName,
-                photoURL: result.user.photoURL,
-                emailVerified: result.user.emailVerified
-            });
-            
-            setToken(idToken);
-            localStorage.setItem('authToken', idToken);
-            
-            console.log('✅ Signed in:', result.user.email);
-            
+            // The onAuthStateChanged listener will handle the state updates
             return result.user;
         } catch (err) {
             console.error('Sign in error:', err);
             setError(err.message);
+            setLoading(false); // Only set loading false on error, success is handled by auth listener
             throw err;
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -127,6 +133,7 @@ export function AuthProvider({ children }) {
             await firebaseSignOut(auth);
             
             setUser(null);
+            setRole(null); // <--- Reset role
             setToken(null);
             localStorage.removeItem('authToken');
             
@@ -160,13 +167,15 @@ export function AuthProvider({ children }) {
 
     const value = {
         user,
+        role, // <--- ADDED: Exposed in context
         token,
         loading,
         error,
         signInWithGoogle,
         signOut,
         getAuthHeader,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
+        isAdmin: role === 'admin' // Helper boolean for convenience
     };
 
     return (

@@ -8,7 +8,7 @@ function initSocketServer(io) {
     io.on('connection', (socket) => {
         console.log('[Socket] New connection:', socket.id);
         
-        // ===== UPDATED register handler (initializes printer_status) =====
+        // ===== REGISTER: Initializes kiosk and printer_status =====
         socket.on('register', async (data) => {
             const { kiosk_id, hostname, printer_name } = data;
             try {
@@ -56,17 +56,48 @@ function initSocketServer(io) {
             }
         });
         
+        // ===== PRINT COMPLETE: Updates Job + Updates Paper Count (Phase 3) =====
         socket.on('print_complete', async (data) => {
             const { job_id, success, pages_printed, error } = data;
             try {
                 if (success) {
+                    // 1. Update job status to COMPLETED
                     await db.updateJob(job_id, { 
                         status: 'COMPLETED', 
                         print_completed_at: new Date(),
                         pages_printed: pages_printed
                     });
-                    console.log(`[Job] ${job_id} completed`);
+
+                    // 2. Subtract pages from kiosk paper count
+                    if (pages_printed && pages_printed > 0) {
+                        try {
+                            // Find which kiosk printed this job
+                            const jobResult = await db.query(
+                                'SELECT kiosk_id FROM jobs WHERE id = $1',
+                                [job_id]
+                            );
+
+                            if (jobResult.rows.length > 0) {
+                                const kioskId = jobResult.rows[0].kiosk_id;
+
+                                // Decrement paper count (ensure it doesn't go below 0)
+                                await db.query(`
+                                    UPDATE kiosks 
+                                    SET current_paper_count = GREATEST(0, current_paper_count - $1)
+                                    WHERE id = $2
+                                `, [pages_printed, kioskId]);
+
+                                console.log(`[Paper Tracking] Kiosk ${kioskId}: -${pages_printed} pages`);
+                            }
+                        } catch (paperError) {
+                            // Log error but don't fail the job completion process
+                            console.error('[Paper Tracking] Error:', paperError);
+                        }
+                    }
+
+                    console.log(`[Job] ${job_id} completed successfully`);
                 } else {
+                    // Handle Failure
                     await db.updateJob(job_id, { 
                         status: 'FAILED', 
                         error_message: error 
@@ -78,7 +109,7 @@ function initSocketServer(io) {
             }
         });
         
-        // ===== REPLACED heartbeat handler (richer status fields) =====
+        // ===== HEARTBEAT: Updates detailed status =====
         socket.on('heartbeat', async (data) => {
             try {
                 // Expecting data: { kiosk_id, uptime, printer_ipp_status, printer_ipp_detail }

@@ -2,17 +2,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
-import { Printer, History, LogOut, User, Menu, X, HelpCircle } from 'lucide-react';
+import { Printer, History, LogOut, User, Menu, X, HelpCircle, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function DashboardLayout({ children, activeTab = 'print' }) {
-    const { user, signOut } = useAuth();
+    const { user, role, signOut } = useAuth();  // ← ADD role here
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
+  
     const tabs = [
-        { id: 'print', label: 'Print', icon: Printer, path: '/' },
-        { id: 'history', label: 'History', icon: History, path: '/history' },
+      { id: 'print', label: 'Print', icon: Printer, path: '/' },
+      { id: 'history', label: 'History', icon: History, path: '/history' },
+      // Only show admin tab if user is admin
+      ...(role === 'admin' || role === 'superadmin' ? [{
+        id: 'admin', 
+        label: 'Admin', 
+        icon: Shield, 
+        path: '/admin'
+      }] : [])
     ];
 
     const handleTabClick = (tab) => {
