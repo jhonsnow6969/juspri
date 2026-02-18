@@ -18,7 +18,8 @@ router.post('/connect', async (req, res) => {
                 status: 'connected', 
                 message: 'Kiosk is online',
                 kiosk_name: kiosk.hostname,
-                printer: kiosk.printer_name
+                printer: kiosk.printer_name,
+                paper_count: kiosk.current_paper_count
             });
         } else {
             res.status(503).json({ status: 'error', message: 'Kiosk is offline or not found' });
@@ -167,6 +168,16 @@ router.get('/jobs/poll', async (req, res) => {
         }
         
         const fileBase64 = fs.readFileSync(job.file_path).toString('base64');
+        
+        // ===== CLEANUP FIX: Delete file immediately after reading =====
+        try {
+            fs.unlinkSync(job.file_path);
+            console.log(`[Cleanup] Deleted transferred file: ${job.file_path}`);
+        } catch (cleanupErr) {
+            console.warn(`[Cleanup] Failed to delete file ${job.file_path}:`, cleanupErr);
+        }
+        // ==============================================================
+        
         res.json({
             jobs: [{
                 job_id: job.id,
