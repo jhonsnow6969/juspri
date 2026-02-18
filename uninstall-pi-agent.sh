@@ -63,23 +63,23 @@ confirm_uninstall() {
 
   echo "This script will remove:"
   echo ""
-  echo "  ${RED}✗${NC} DirectPrint pi-agent installation"
-  echo "  ${RED}✗${NC} Git repository (~/directprint-agent or ~/qr-wifi-printer)"
-  echo "  ${RED}✗${NC} Systemd services (directprint-agent, directprint-qr)"
-  echo "  ${RED}✗${NC} Service configuration files"
-  echo "  ${RED}✗${NC} Print queue files and temporary data"
-  echo "  ${RED}✗${NC} Environment configuration (.env files)"
+  echo -e "  ${RED}✗${NC} DirectPrint pi-agent installation"
+  echo -e "  ${RED}✗${NC} Git repository (~/directprint-agent or ~/qr-wifi-printer)"
+  echo -e "  ${RED}✗${NC} Systemd services (directprint-agent, directprint-qr)"
+  echo -e "  ${RED}✗${NC} Service configuration files"
+  echo -e "  ${RED}✗${NC} Print queue files and temporary data"
+  echo -e "  ${RED}✗${NC} Environment configuration (.env files)"
   echo ""
-  echo "This script will ${GREEN}KEEP${NC}:"
+  echo -e "This script will ${GREEN}KEEP${NC}:"
   echo ""
-  echo "  ${GREEN}✓${NC} Node.js"
-  echo "  ${GREEN}✓${NC} Git"
-  echo "  ${GREEN}✓${NC} CUPS (printing system)"
-  echo "  ${GREEN}✓${NC} LibreOffice"
-  echo "  ${GREEN}✓${NC} libvips"
-  echo "  ${GREEN}✓${NC} Ghostscript"
-  echo "  ${GREEN}✓${NC} ImageMagick (if installed)"
-  echo "  ${GREEN}✓${NC} All system packages and dependencies"
+  echo -e "  ${GREEN}✓${NC} Node.js"
+  echo -e "  ${GREEN}✓${NC} Git"
+  echo -e "  ${GREEN}✓${NC} CUPS (printing system)"
+  echo -e "  ${GREEN}✓${NC} LibreOffice"
+  echo -e "  ${GREEN}✓${NC} libvips"
+  echo -e "  ${GREEN}✓${NC} Ghostscript"
+  echo -e "  ${GREEN}✓${NC} ImageMagick (if installed)"
+  echo -e "  ${GREEN}✓${NC} All system packages and dependencies"
   echo ""
 
   read -p "Continue with uninstallation? (y/n): " -n 1 -r
@@ -179,7 +179,7 @@ backup_config() {
     print_success "Configuration backed up to: $BACKUP_DIR"
     echo ""
     print_warning "Save this location if you want to restore settings later:"
-    echo "          ${CYAN}$BACKUP_DIR${NC}"
+    echo -e "          ${CYAN}$BACKUP_DIR${NC}"
     echo ""
   else
     print_info "No configuration files found to backup"
@@ -235,26 +235,27 @@ remove_user_group() {
   if groups $USER | grep -q lpadmin; then
     echo ""
     print_warning "Your user is in the 'lpadmin' group (for CUPS printer management)."
-    echo "This was likely added by the DirectPrint installer."
+    echo -e "This was likely added by the DirectPrint installer."
     echo ""
     read -p "Remove user from lpadmin group? (y/n): " -n 1 -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       sudo gpasswd -d $USER lpadmin
-      print_success "Removed $USER from lpadmin group"
-      print_warning "You may need to log out and back in for this to take effect"
+      echo -e "Removed $USER from lpadmin group"
+      echo -e "You may need to log out and back in for this to take effect"
     else
-      print_info "Keeping user in lpadmin group"
+      echo -e "Keeping user in lpadmin group"
     fi
   else
-    print_info "User not in lpadmin group, nothing to do"
+    echo -e "User not in lpadmin group, nothing to do"
   fi
 }
 
 # Check for orphaned processes
 check_orphaned_processes() {
-  print_section "Checking for Running Processes"
+  echo ""
+  echo -e "${YELLOW}Checking for Running Processes${NC}"
 
   # Check for any running node processes related to directprint
   local processes=$(ps aux | grep -i "directprint\|pi-agent\|qr-server" | grep -v grep | grep -v uninstall)

@@ -62,7 +62,7 @@ function startScheduledTasks() {
     }, 30000);
 
     // ===== CLEANUP FIX 3: Delete Orphaned Files in Uploads Folder =====
-    // This removes files that are > 30 minutes old from the file system
+    // This removes files that are > 10 minutes old from the file system
     setInterval(() => {
         const uploadDir = path.join(__dirname, '../uploads');
         const maxAgeMinutes = 10;

@@ -42,9 +42,6 @@ async function requireAdmin(req, res, next) {
 
         req.adminUser = user;
         
-        // Log admin access for audit
-        console.log(`[Admin Auth] Access granted: ${user.email} (${user.role})`);
-        
         next();
 
     } catch (error) {
