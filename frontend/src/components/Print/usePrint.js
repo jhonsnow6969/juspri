@@ -367,10 +367,12 @@ export function usePrint() {
     }, [pricing, API_URL, addLog, getAuthHeader, signOut]);
 
     const resetFlow = useCallback(() => {
+        console.log('🔄 resetFlow called!'); 
         setStatus('IDLE');
         setConfig(null);
         setFile(null);
         setPricing(null);
+        setPrinterStatusResult(null); 
         setScannerActive(true);
         addLog('Reset to scanner');
     }, [addLog]);

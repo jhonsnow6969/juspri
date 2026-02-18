@@ -67,7 +67,7 @@ export function PrintInterface() {
           {status === 'PRINTER_WARNING' && (
             <PrinterWarningView
               proceedDespiteWarning={printState.proceedDespiteWarning}
-              rescanQR={printState.rescanQR}
+              resetFlow={printState.rescanQR}
               printerStatusResult={printState.printerStatusResult}
             />
           )}

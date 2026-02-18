@@ -56,6 +56,7 @@ let pollCount = 0;
 let jobsFetchedToday = 0;
 let conversionsToday = 0;
 let lastPollTime = null;
+let lastPrinterStatus = 'unknown'; 
 
 // ==================== CONVERSION TOOLS CHECK ====================
 function checkConversionTools() {
@@ -567,23 +568,84 @@ setTimeout(() => {
   pollForJobs();
 }, 2000);
 
-// ==================== HEARTBEAT ====================
-setInterval(() => {
-  if (socket.connected) {
-    socket.emit('heartbeat', {
-      kiosk_id: KIOSK_ID,
-      uptime: process.uptime(),
-      printer_status: printerName ? 'ready' : 'no_printer',
-      current_job: currentJob,
-      pending_jobs: pendingJobs.size,
-      memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      poll_count: pollCount,
-      jobs_fetched_today: jobsFetchedToday,
-      conversions_today: conversionsToday,
-      last_poll: lastPollTime
+
+// ==================== PRINTER STATUS CHECK ====================
+/**
+ * Check printer status via lpstat (CUPS)
+ * Returns: { status: 'healthy'|'error'|'unknown', detail: string|null }
+ */
+function checkPrinterStatus(printerName) {
+  return new Promise((resolve) => {
+    if (!printerName) {
+      return resolve({ status: 'unknown', detail: 'no_printer_configured' });
+    }
+
+    exec(`lpstat -p ${printerName} 2>&1`, { timeout: 5000 }, (error, stdout) => {
+      if (error && !stdout) {
+        console.warn(`   ⚠ lpstat failed: ${error.message}`);
+        return resolve({ status: 'unknown', detail: 'cups_unavailable' });
+      }
+
+      const output = (stdout || '').toLowerCase();
+
+      // Hard errors
+      if (output.includes('out of paper') || output.includes('media empty') || output.includes('no media')) {
+        return resolve({ status: 'error', detail: 'media-empty' });
+      }
+      if (output.includes('out of ink') || output.includes('toner empty') || output.includes('ink empty')) {
+        return resolve({ status: 'error', detail: 'toner-empty' });
+      }
+      if (output.includes('cover open') || output.includes('door open')) {
+        return resolve({ status: 'error', detail: 'cover-open' });
+      }
+      if (output.includes('stopped') && !output.includes('idle')) {
+        return resolve({ status: 'error', detail: 'stopped' });
+      }
+      if (output.includes('not connected') || output.includes('offline')) {
+        return resolve({ status: 'error', detail: 'offline' });
+      }
+
+      // Healthy states
+      if (output.includes('idle') || output.includes('processing')) {
+        return resolve({ status: 'healthy', detail: null });
+      }
+
+      // Unknown/unsupported
+      return resolve({ status: 'unknown', detail: 'ipp_unsupported' });
     });
+  });
+}
+
+
+// ==================== HEARTBEAT ====================
+setInterval(async () => {
+  if (!socket.connected) return;
+
+  // Check printer status on every heartbeat
+  const printerStatusResult = await checkPrinterStatus(printerName);
+
+  // Log only if status changed (avoid spam)
+  if (printerStatusResult.status !== lastPrinterStatus) {
+    console.log(`🖨️  Printer status: ${printerStatusResult.status} (${printerStatusResult.detail || 'ok'})`);
+    lastPrinterStatus = printerStatusResult.status;
   }
+
+  socket.emit('heartbeat', {
+    kiosk_id: KIOSK_ID,
+    uptime: process.uptime(),
+    printer_status: printerName ? 'ready' : 'no_printer',
+    printer_ipp_status: printerStatusResult.status,        // ← NEW
+    printer_ipp_detail: printerStatusResult.detail,        // ← NEW
+    current_job: currentJob,
+    pending_jobs: pendingJobs.size,
+    memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    poll_count: pollCount,
+    jobs_fetched_today: jobsFetchedToday,
+    conversions_today: conversionsToday,
+    last_poll: lastPollTime
+  });
 }, HEARTBEAT_INTERVAL);
+
 
 // Status log
 setInterval(() => {

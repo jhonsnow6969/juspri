@@ -14,9 +14,12 @@ const jobRoutes = require('./modules/job-routes');
 const adminRoutes = require('./modules/admin-routes');
 const { initSocketServer } = require('./modules/socket-manager');
 const { startScheduledTasks } = require('./modules/tasks');
-
+const kioskRoutes = require('./modules/kiosk-routes'); 
 const app = express();
 const server = http.createServer(app);
+
+// Make db accessible to routes
+app.set('db', db);
 
 initializeFirebase();
 
@@ -63,7 +66,7 @@ initSocketServer(io);
 // ==================== ROUTES ====================
 app.use('/api', jobRoutes);
 app.use('/api', adminRoutes);
-
+app.use('/api/kiosk', kioskRoutes);
 // Global Error Handler for Multer
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {

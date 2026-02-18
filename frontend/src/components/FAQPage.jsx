@@ -1,10 +1,11 @@
 // frontend/src/components/FAQPage.jsx
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronDown, Printer, FileText, CreditCard, 
-  Shield, HelpCircle, ArrowLeft 
+  Shield, HelpCircle, ArrowLeft, Search, X,
+  ThumbsUp, ThumbsDown, Mail, Send
 } from 'lucide-react';
 
 const faqs = [
@@ -94,12 +95,55 @@ const faqs = [
   }
 ];
 
-function AccordionItem({ question, answer, isOpen, onToggle }) {
+// Analytics helper
+const trackFAQView = (questionId) => {
+  try {
+    const views = JSON.parse(localStorage.getItem('faq_views') || '{}');
+    views[questionId] = (views[questionId] || 0) + 1;
+    localStorage.setItem('faq_views', JSON.stringify(views));
+  } catch (e) {
+    console.error('Analytics error:', e);
+  }
+};
+
+const trackHelpful = (questionId, helpful) => {
+  try {
+    const feedback = JSON.parse(localStorage.getItem('faq_feedback') || '{}');
+    if (!feedback[questionId]) {
+      feedback[questionId] = { helpful: 0, unhelpful: 0 };
+    }
+    if (helpful) {
+      feedback[questionId].helpful++;
+    } else {
+      feedback[questionId].unhelpful++;
+    }
+    localStorage.setItem('faq_feedback', JSON.stringify(feedback));
+  } catch (e) {
+    console.error('Feedback tracking error:', e);
+  }
+};
+
+function AccordionItem({ questionId, question, answer, isOpen, onToggle }) {
+  const [voted, setVoted] = useState(null);
+
+  const handleVote = (helpful) => {
+    if (voted !== null) return; // Already voted
+    setVoted(helpful);
+    trackHelpful(questionId, helpful);
+  };
+
   return (
     <div className="border-b border-border last:border-0">
       <button
         onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
         className="w-full flex items-start justify-between gap-4 py-4 text-left group"
+        aria-expanded={isOpen}
       >
         <span className={`text-sm font-medium transition-colors ${isOpen ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
           {question}
@@ -128,6 +172,48 @@ function AccordionItem({ question, answer, isOpen, onToggle }) {
                   {line}
                 </p>
               ))}
+
+              {/* Was this helpful? */}
+              <div className="mt-4 pt-4 border-t border-border/50 flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Was this helpful?</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleVote(true)}
+                    disabled={voted !== null}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      voted === true
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : voted === false
+                        ? 'opacity-40 cursor-not-allowed'
+                        : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <ThumbsUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleVote(false)}
+                    disabled={voted !== null}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      voted === false
+                        ? 'bg-red-500/20 text-red-400'
+                        : voted === true
+                        ? 'opacity-40 cursor-not-allowed'
+                        : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <ThumbsDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {voted !== null && (
+                  <motion.span
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Thanks for your feedback!
+                  </motion.span>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -136,14 +222,167 @@ function AccordionItem({ question, answer, isOpen, onToggle }) {
   );
 }
 
+function ContactModal({ isOpen, onClose }) {
+  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // In production, send to backend API
+    console.log('Contact form:', formData);
+    setSubmitted(true);
+    setTimeout(() => {
+      onClose();
+      setSubmitted(false);
+      setFormData({ name: '', email: '', message: '' });
+    }, 2000);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          transition={{ type: 'spring', duration: 0.3 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-card border border-border rounded-2xl p-6 max-w-md w-full"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Mail className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Contact Support</h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-accent rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
+          {submitted ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="py-8 text-center"
+            >
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ThumbsUp className="w-8 h-8 text-emerald-400" />
+              </div>
+              <p className="text-foreground font-medium mb-2">Message sent!</p>
+              <p className="text-sm text-muted-foreground">We'll get back to you soon.</p>
+            </motion.div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-muted/10 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Your name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-muted/10 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="your@email.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Message</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                  className="w-full px-3 py-2 bg-muted/10 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                  placeholder="How can we help?"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                Send Message
+              </button>
+            </form>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 export function FAQPage() {
   const navigate = useNavigate();
   const [openItems, setOpenItems] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  // SEO Meta Tags
+  useEffect(() => {
+    document.title = 'FAQs & Support - JusPri';
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Find answers about JusPri cloud printing: supported formats, refunds, privacy, and more. Get help instantly.');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'description';
+      meta.content = 'Find answers about JusPri cloud printing: supported formats, refunds, privacy, and more. Get help instantly.';
+      document.head.appendChild(meta);
+    }
+
+    return () => {
+      document.title = 'JusPri';
+    };
+  }, []);
 
   const toggle = (catIdx, qIdx) => {
     const key = `${catIdx}-${qIdx}`;
+    const questionId = `${catIdx}-${qIdx}`;
+    
+    // Track view if opening
+    if (!openItems[key]) {
+      trackFAQView(questionId);
+    }
+    
     setOpenItems(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Search filtering
+  const filteredFaqs = useMemo(() => {
+    if (!searchQuery.trim()) return faqs;
+
+    const query = searchQuery.toLowerCase();
+    return faqs.map(section => ({
+      ...section,
+      questions: section.questions.filter(q =>
+        q.q.toLowerCase().includes(query) ||
+        q.a.toLowerCase().includes(query)
+      )
+    })).filter(section => section.questions.length > 0);
+  }, [searchQuery]);
+
+  const hasResults = filteredFaqs.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -170,7 +409,7 @@ export function FAQPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="mb-12"
+          className="mb-8"
         >
           <h1 className="text-3xl font-bold text-foreground mb-3">FAQs & Support</h1>
           <p className="text-muted-foreground">
@@ -178,42 +417,96 @@ export function FAQPage() {
           </p>
         </motion.div>
 
-        {/* FAQ sections */}
-        <div className="space-y-6">
-          {faqs.map((section, catIdx) => {
-            const Icon = section.icon;
-            return (
-              <motion.div
-                key={catIdx}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: catIdx * 0.07 }}
-                className="bg-card/60 border border-border rounded-2xl overflow-hidden"
+        {/* Search Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="mb-8"
+        >
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search FAQs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-card/60 border border-border rounded-xl text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded-md transition-colors"
               >
-                {/* Section header */}
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-                  <div className={`w-8 h-8 rounded-lg ${section.bg} flex items-center justify-center`}>
-                    <Icon className={`w-4 h-4 ${section.color}`} />
-                  </div>
-                  <h2 className="font-semibold text-foreground text-sm">{section.category}</h2>
-                </div>
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-xs text-muted-foreground mt-2">
+              {hasResults ? `Found ${filteredFaqs.reduce((acc, s) => acc + s.questions.length, 0)} result(s)` : 'No results found'}
+            </p>
+          )}
+        </motion.div>
 
-                {/* Questions */}
-                <div className="px-5">
-                  {section.questions.map((item, qIdx) => (
-                    <AccordionItem
-                      key={qIdx}
-                      question={item.q}
-                      answer={item.a}
-                      isOpen={!!openItems[`${catIdx}-${qIdx}`]}
-                      onToggle={() => toggle(catIdx, qIdx)}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+        {/* FAQ sections */}
+        {hasResults ? (
+          <div className="space-y-6">
+            {filteredFaqs.map((section, catIdx) => {
+              const Icon = section.icon;
+              return (
+                <motion.div
+                  key={catIdx}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: catIdx * 0.07 }}
+                  className="bg-card/60 border border-border rounded-2xl overflow-hidden"
+                >
+                  {/* Section header */}
+                  <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+                    <div className={`w-8 h-8 rounded-lg ${section.bg} flex items-center justify-center`}>
+                      <Icon className={`w-4 h-4 ${section.color}`} />
+                    </div>
+                    <h2 className="font-semibold text-foreground text-sm">{section.category}</h2>
+                  </div>
+
+                  {/* Questions */}
+                  <div className="px-5">
+                    {section.questions.map((item, qIdx) => (
+                      <AccordionItem
+                        key={qIdx}
+                        questionId={`${catIdx}-${qIdx}`}
+                        question={item.q}
+                        answer={item.a}
+                        isOpen={!!openItems[`${catIdx}-${qIdx}`]}
+                        onToggle={() => toggle(catIdx, qIdx)}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <HelpCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-foreground font-medium mb-2">No results found</p>
+            <p className="text-sm text-muted-foreground mb-6">
+              Try different keywords or contact us directly
+            </p>
+            <button
+              onClick={() => setContactModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Mail className="w-4 h-4" />
+              Contact Support
+            </button>
+          </motion.div>
+        )}
 
         {/* Footer */}
         <motion.div
@@ -222,9 +515,16 @@ export function FAQPage() {
           transition={{ delay: 0.5 }}
           className="mt-12 pt-8 border-t border-border text-center"
         >
-          <p className="text-sm text-muted-foreground mb-1">Still have questions?</p>
+          <p className="text-sm text-muted-foreground mb-3">Still have questions?</p>
+          <button
+            onClick={() => setContactModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 rounded-lg text-sm font-medium text-foreground transition-colors mb-4"
+          >
+            <Mail className="w-4 h-4" />
+            Contact Support
+          </button>
           <p className="text-xs text-muted-foreground/60">
-            Contact your kiosk operator or email{' '}
+            Or email{' '}
             <span className="text-muted-foreground underline underline-offset-2 cursor-pointer">
               support@juspri.com
             </span>
@@ -235,6 +535,9 @@ export function FAQPage() {
           </p>
         </motion.div>
       </div>
+
+      {/* Contact Modal */}
+      <ContactModal isOpen={contactModalOpen} onClose={() => setContactModalOpen(false)} />
     </div>
   );
 }
