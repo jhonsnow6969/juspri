@@ -8,5 +8,8 @@ node_modules/
 # OS Files
 .DS_Store
 
+# pi-agent is a standalone repo
+pi-agent/
+
 # Backend Secrets
 backend/config/firebase-service-account.json
