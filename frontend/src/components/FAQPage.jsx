@@ -17,7 +17,7 @@ const faqs = [
     questions: [
       {
         q: 'What file formats can I print?',
-        a: `JusPri supports the following file types:\n\n• PDF (.pdf) — Prints directly, no conversion needed\n• Microsoft Word (.doc, .docx) — Auto-converted to PDF\n• OpenDocument Text (.odt) — Auto-converted to PDF\n• Rich Text Format (.rtf) — Auto-converted to PDF\n• Plain Text (.txt, .md) — Auto-converted to PDF\n• Images (.png, .jpg, .jpeg) — Scaled to A4 and printed\n\nMaximum file size is 50 MB.`
+        a: `JusPri supports the following file types:\n\n• PDF (.pdf) — Prints directly, no conversion needed\n• Microsoft Word (.doc, .docx) — Auto-converted to PDF\n• OpenDocument Text (.odt) — Auto-converted to PDF\n• Rich Text Format (.rtf) — Auto-converted to PDF\n• Plain Text (.txt, .md) — Auto-converted to PDF\n• Images (.png, .jpg, .jpeg) — Scaled to A4 and printed\n\nMaximum file size right now is 100 MB , but we are working on increasing it.`
       },
       {
         q: 'Are non-PDF files converted automatically?',
