@@ -97,12 +97,24 @@ function initSocketServer(io) {
 
                     console.log(`[Job] ${job_id} completed successfully`);
                 } else {
-                    // Handle Failure
-                    await db.transitionJobState(job_id, 'FAILED', {
-                        message: 'Print failed',
-                        error_message: error
-                    });
-                    console.log(`[Job] ${job_id} failed: ${error}`);
+                    // Handle Failure with retry logic
+                    const jobData = await db.getJob(job_id);
+                    const retryCount = jobData?.retry_count || 0;
+
+                    if (retryCount < 3) {
+                        await db.updateJob(job_id, {
+                            status: 'PAID',
+                            retry_count: retryCount + 1,
+                            error_message: `Retry ${retryCount + 1}/3: ${error}`
+                        });
+                        console.log(`[Job] ${job_id} failed, requeued (retry ${retryCount + 1}/3)`);
+                    } else {
+                        await db.transitionJobState(job_id, 'FAILED', {
+                            message: 'Print failed after 3 retries',
+                            error_message: error
+                        });
+                        console.log(`[Job] ${job_id} permanently failed after 3 retries`);
+                    }
                 }
             } catch (error) {
                 console.error('[Job] print_complete error:', error);
@@ -154,10 +166,15 @@ function initSocketServer(io) {
     });
 }
 
+function getKioskSocket(kioskId) {
+    return kioskSockets.get(kioskId) || null;
+}
+
 module.exports = {
     initSocketServer,
     kioskSockets,
-    emitToKiosk
+    emitToKiosk,
+    getKioskSocket
 };
 
 /*

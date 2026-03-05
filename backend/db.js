@@ -87,7 +87,7 @@ async function updateJob(jobId, updates) {
         'token_timestamp', 'error_message', 'pages_printed',
         'paid_at', 'queued_at', 'print_started_at', 'print_completed_at',
         'metadata', 'status_message', 'last_status_update', 'job_type',
-        'output_file_url', 'scan_options'
+        'output_file_url', 'scan_options', 'retry_count', 'file_path', 'file_size'
     ];
     
     const setClause = [];
@@ -200,6 +200,33 @@ async function getJobs(filters = {}) {
         return result.rows;
     } catch (error) {
         console.error('Error getting jobs:', error);
+        throw error;
+    }
+}
+
+/**
+ * Atomically claim the next PAID job for a kiosk.
+ * Uses FOR UPDATE SKIP LOCKED to prevent duplicate dispatch.
+ */
+async function getNextPrintJob(kioskId) {
+    const query = `
+        UPDATE jobs
+        SET status = 'QUEUED', queued_at = NOW(), updated_at = NOW()
+        WHERE id = (
+            SELECT id FROM jobs
+            WHERE kiosk_id = $1 AND status = 'PAID'
+            ORDER BY created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING *
+    `;
+
+    try {
+        const result = await pool.query(query, [kioskId]);
+        return result.rows[0] || null;
+    } catch (error) {
+        console.error('Error getting next print job:', error);
         throw error;
     }
 }
@@ -509,6 +536,7 @@ module.exports = {
     updateJob,
     transitionJobState,
     getJobs,
+    getNextPrintJob,
     deleteExpiredJobs,
     
     // Kiosks

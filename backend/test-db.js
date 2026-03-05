@@ -1,6 +1,6 @@
 // backend/test-db.js - Comprehensive Database Test
 require('dotenv').config();
-const db = require('../db');
+const db = require('./db');
 
 // Colors for console output
 const colors = {

@@ -1,10 +1,6 @@
 -- ============================================
--- JusPri Complete Database Schema (v2.1)
--- Includes: Phase 1, 2, 3 + Real-time Status
--- NO DUPLEX SUPPORT (removed per business requirements)
+-- JusPri Complete Database Schema
 -- Run AFTER setup-database.sql
--- ============================================
-
 -- Connect to database before running:
 -- psql -U printuser -d printkiosk -h localhost -p 5433 -f schema.sql
 
@@ -77,6 +73,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     -- Error Handling
     error_message TEXT,
     pages_printed INTEGER,
+    retry_count INTEGER DEFAULT 0,
 
     -- Phase 4: Real-time Status Updates
     status_message TEXT,
