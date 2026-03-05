@@ -1,11 +1,12 @@
 -- ============================================
--- JusPri Complete Database Schema (v2.0)
+-- JusPri Complete Database Schema (v2.1)
 -- Includes: Phase 1, 2, 3 + Real-time Status
+-- NO DUPLEX SUPPORT (removed per business requirements)
 -- Run AFTER setup-database.sql
 -- ============================================
 
 -- Connect to database before running:
--- psql -U printuser -d printkiosk -f schema.sql
+-- psql -U printuser -d printkiosk -h localhost -p 5433 -f schema.sql
 
 -- ==================== USERS TABLE ====================
 CREATE TABLE IF NOT EXISTS users (
@@ -63,11 +64,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     payment_status VARCHAR(50) DEFAULT 'pending',
     payment_id VARCHAR(255),
 
-    -- Job Type & Extensible Metadata
+    -- Job Type & Extensible Metadata (for scanning/xerox)
     job_type VARCHAR(30) DEFAULT 'print',
     metadata JSONB DEFAULT '{}'::jsonb,
-    scan_options JSONB DEFAULT '{}'::jsonb,
-    output_file_url TEXT,
+    scan_options JSONB DEFAULT '{}'::jsonb,  -- For scanning: resolution, color mode, format
+    output_file_url TEXT,                    -- For scanning: download URL
 
     -- Print Token
     print_token VARCHAR(255),
@@ -119,6 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_payment_status ON jobs(payment_status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_last_status_update ON jobs(last_status_update);
 CREATE INDEX IF NOT EXISTS idx_jobs_kiosk_status ON jobs(kiosk_id, status);
+CREATE INDEX IF NOT EXISTS idx_jobs_type ON jobs(job_type);
 
 -- Kiosks
 CREATE INDEX IF NOT EXISTS idx_kiosks_status ON kiosks(status);
@@ -140,16 +142,18 @@ CHECK (role IN ('user', 'admin', 'superadmin'));
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_job_status;
 ALTER TABLE jobs ADD CONSTRAINT valid_job_status
 CHECK (status IN (
-    'PENDING','PAID','QUEUED','SENT_TO_PI',
-    'PRINTING','PRINTING_PASS_1','WAITING_FOR_FLIP','PRINTING_PASS_2',
+    -- Basic print workflow
+    'PENDING','PAID','QUEUED','SENT_TO_PI','PRINTING',
+    'COMPLETED','FAILED','EXPIRED','CANCELLED',
+    -- Scanning workflow
     'DISCOVERING_SCANNER','SCANNING','PROCESSING',
-    'SCANNING_ORIGINAL','PROCESSING_COPY','PRINTING_COPY',
-    'COMPLETED','FAILED','EXPIRED','CANCELLED'
+    -- Xerox workflow
+    'SCANNING_ORIGINAL','PROCESSING_COPY','PRINTING_COPY'
 ));
 
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_job_type;
 ALTER TABLE jobs ADD CONSTRAINT valid_job_type
-CHECK (job_type IN ('print','duplex','scan','xerox'));
+CHECK (job_type IN ('print','scan','xerox'));
 
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_payment_status;
 ALTER TABLE jobs ADD CONSTRAINT valid_payment_status
@@ -198,6 +202,7 @@ SELECT
     j.id,
     j.kiosk_id,
     k.hostname AS kiosk_name,
+    j.job_type,
     j.filename,
     j.pages,
     j.total_cost,
@@ -207,7 +212,7 @@ SELECT
     j.print_started_at
 FROM jobs j
 LEFT JOIN kiosks k ON j.kiosk_id = k.id
-WHERE j.status IN ('PENDING','PAID','QUEUED','PRINTING')
+WHERE j.status IN ('PENDING','PAID','QUEUED','PRINTING','SCANNING','SCANNING_ORIGINAL')
 ORDER BY j.created_at DESC;
 
 -- Kiosk Stats
@@ -221,6 +226,9 @@ SELECT
     COUNT(j.id) AS total_jobs,
     COUNT(CASE WHEN j.status='COMPLETED' THEN 1 END) AS completed_jobs,
     COUNT(CASE WHEN j.status='FAILED' THEN 1 END) AS failed_jobs,
+    COUNT(CASE WHEN j.job_type='print' THEN 1 END) AS print_jobs,
+    COUNT(CASE WHEN j.job_type='scan' THEN 1 END) AS scan_jobs,
+    COUNT(CASE WHEN j.job_type='xerox' THEN 1 END) AS xerox_jobs,
     COALESCE(SUM(
         CASE WHEN j.payment_status='paid'
         THEN j.total_cost ELSE 0 END
@@ -238,6 +246,9 @@ SELECT
     COUNT(j.id) AS total_jobs,
     COUNT(CASE WHEN j.status = 'COMPLETED' THEN 1 END) AS completed_jobs,
     COUNT(CASE WHEN j.status = 'FAILED' THEN 1 END) AS failed_jobs,
+    COUNT(CASE WHEN j.job_type = 'print' THEN 1 END) AS print_jobs,
+    COUNT(CASE WHEN j.job_type = 'scan' THEN 1 END) AS scan_jobs,
+    COUNT(CASE WHEN j.job_type = 'xerox' THEN 1 END) AS xerox_jobs,
     COALESCE(SUM(CASE WHEN j.payment_status = 'paid' THEN j.total_cost ELSE 0 END), 0) AS revenue,
     COALESCE(SUM(CASE WHEN j.status = 'COMPLETED' THEN j.pages ELSE 0 END), 0) AS pages_printed
 FROM kiosks k
@@ -252,6 +263,9 @@ SELECT
     COUNT(DISTINCT j.id) AS total_jobs,
     COUNT(CASE WHEN j.status = 'COMPLETED' THEN 1 END) AS completed_jobs,
     COUNT(CASE WHEN j.status = 'FAILED' THEN 1 END) AS failed_jobs,
+    COUNT(CASE WHEN j.job_type = 'print' THEN 1 END) AS print_jobs,
+    COUNT(CASE WHEN j.job_type = 'scan' THEN 1 END) AS scan_jobs,
+    COUNT(CASE WHEN j.job_type = 'xerox' THEN 1 END) AS xerox_jobs,
     COALESCE(SUM(CASE WHEN j.payment_status = 'paid' THEN j.total_cost ELSE 0 END), 0) AS total_revenue,
     COALESCE(SUM(CASE WHEN j.status = 'COMPLETED' THEN j.pages ELSE 0 END), 0) AS total_pages_printed,
     ROUND(
@@ -285,6 +299,8 @@ WHERE table_schema = 'public';
 \echo '✅ Schema created successfully!'
 \echo '📊 Tables: users, kiosks, jobs, admin_actions'
 \echo '📈 Views: active_jobs, kiosk_stats, daily_kiosk_stats, system_metrics'
+\echo ''
+\echo '✨ Features ready: Print, Scan, Xerox (NO duplex)'
 \echo ''
 \echo '⚠️  NEXT STEP: Promote your admin account'
 \echo '   Run: UPDATE users SET role = '\''admin'\'' WHERE email = '\''your@email.com'\'';'
