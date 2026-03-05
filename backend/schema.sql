@@ -21,22 +21,22 @@ CREATE TABLE IF NOT EXISTS kiosks (
     id VARCHAR(255) PRIMARY KEY,
     hostname VARCHAR(255),
     printer_name VARCHAR(255),
-    
+
     -- Core Status
     status VARCHAR(50) DEFAULT 'offline',
     last_seen TIMESTAMP,
     uptime FLOAT,
     socket_id VARCHAR(255),
-    
+
     -- Phase 1: Printer Health Tracking
     printer_status VARCHAR(50) DEFAULT 'unknown',
     printer_status_detail TEXT,
     last_status_check TIMESTAMP,
-    
+
     -- Phase 3: Paper Tracking
     current_paper_count INTEGER DEFAULT 500,
     price_per_page DECIMAL(10,2) DEFAULT 3.00,
-    
+
     -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -47,34 +47,40 @@ CREATE TABLE IF NOT EXISTS jobs (
     id VARCHAR(255) PRIMARY KEY,
     user_id VARCHAR(255),
     kiosk_id VARCHAR(255) NOT NULL,
-    
+
     -- File Info
     filename VARCHAR(255) NOT NULL,
     file_path TEXT NOT NULL,
     file_size INTEGER,
     pages INTEGER NOT NULL,
-    
+
     -- Pricing
     price_per_page DECIMAL(10,2) NOT NULL,
     total_cost DECIMAL(10,2) NOT NULL,
-    
+
     -- Status
     status VARCHAR(50) DEFAULT 'PENDING',
     payment_status VARCHAR(50) DEFAULT 'pending',
     payment_id VARCHAR(255),
-    
+
+    -- Job Type & Extensible Metadata
+    job_type VARCHAR(30) DEFAULT 'print',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    scan_options JSONB DEFAULT '{}'::jsonb,
+    output_file_url TEXT,
+
     -- Print Token
     print_token VARCHAR(255),
     token_timestamp BIGINT,
-    
+
     -- Error Handling
     error_message TEXT,
     pages_printed INTEGER,
-    
+
     -- Phase 4: Real-time Status Updates
     status_message TEXT,
     last_status_update TIMESTAMP,
-    
+
     -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -82,7 +88,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     queued_at TIMESTAMP,
     print_started_at TIMESTAMP,
     print_completed_at TIMESTAMP,
-    
+
     -- Foreign Keys
     FOREIGN KEY (kiosk_id) REFERENCES kiosks(id) ON DELETE CASCADE
 );
@@ -112,6 +118,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_payment_status ON jobs(payment_status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_last_status_update ON jobs(last_status_update);
+CREATE INDEX IF NOT EXISTS idx_jobs_kiosk_status ON jobs(kiosk_id, status);
 
 -- Kiosks
 CREATE INDEX IF NOT EXISTS idx_kiosks_status ON kiosks(status);
@@ -131,19 +138,26 @@ CHECK (role IN ('user', 'admin', 'superadmin'));
 
 -- Jobs
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_job_status;
-ALTER TABLE jobs ADD CONSTRAINT valid_job_status 
+ALTER TABLE jobs ADD CONSTRAINT valid_job_status
 CHECK (status IN (
     'PENDING','PAID','QUEUED','SENT_TO_PI',
-    'PRINTING','COMPLETED','FAILED','EXPIRED'
+    'PRINTING','PRINTING_PASS_1','WAITING_FOR_FLIP','PRINTING_PASS_2',
+    'DISCOVERING_SCANNER','SCANNING','PROCESSING',
+    'SCANNING_ORIGINAL','PROCESSING_COPY','PRINTING_COPY',
+    'COMPLETED','FAILED','EXPIRED','CANCELLED'
 ));
 
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_job_type;
+ALTER TABLE jobs ADD CONSTRAINT valid_job_type
+CHECK (job_type IN ('print','duplex','scan','xerox'));
+
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS valid_payment_status;
-ALTER TABLE jobs ADD CONSTRAINT valid_payment_status 
+ALTER TABLE jobs ADD CONSTRAINT valid_payment_status
 CHECK (payment_status IN ('pending','paid','failed','refunded'));
 
 -- Kiosks
 ALTER TABLE kiosks DROP CONSTRAINT IF EXISTS valid_kiosk_status;
-ALTER TABLE kiosks ADD CONSTRAINT valid_kiosk_status 
+ALTER TABLE kiosks ADD CONSTRAINT valid_kiosk_status
 CHECK (status IN ('online','offline','maintenance','busy'));
 
 ALTER TABLE kiosks DROP CONSTRAINT IF EXISTS valid_printer_status;
@@ -180,7 +194,7 @@ EXECUTE FUNCTION update_updated_at_column();
 
 -- Active Jobs
 CREATE OR REPLACE VIEW active_jobs AS
-SELECT 
+SELECT
     j.id,
     j.kiosk_id,
     k.hostname AS kiosk_name,
@@ -198,7 +212,7 @@ ORDER BY j.created_at DESC;
 
 -- Kiosk Stats
 CREATE OR REPLACE VIEW kiosk_stats AS
-SELECT 
+SELECT
     k.id,
     k.hostname,
     k.status,
@@ -208,7 +222,7 @@ SELECT
     COUNT(CASE WHEN j.status='COMPLETED' THEN 1 END) AS completed_jobs,
     COUNT(CASE WHEN j.status='FAILED' THEN 1 END) AS failed_jobs,
     COALESCE(SUM(
-        CASE WHEN j.payment_status='paid' 
+        CASE WHEN j.payment_status='paid'
         THEN j.total_cost ELSE 0 END
     ),0) AS total_revenue
 FROM kiosks k
@@ -217,7 +231,7 @@ GROUP BY k.id, k.hostname, k.status, k.printer_status, k.current_paper_count;
 
 -- Daily Kiosk Stats (Phase 2)
 CREATE OR REPLACE VIEW daily_kiosk_stats AS
-SELECT 
+SELECT
     k.id AS kiosk_id,
     k.hostname AS kiosk_name,
     DATE(j.created_at) AS date,
@@ -234,15 +248,15 @@ ORDER BY date DESC, kiosk_id;
 
 -- System Metrics (Phase 2)
 CREATE OR REPLACE VIEW system_metrics AS
-SELECT 
+SELECT
     COUNT(DISTINCT j.id) AS total_jobs,
     COUNT(CASE WHEN j.status = 'COMPLETED' THEN 1 END) AS completed_jobs,
     COUNT(CASE WHEN j.status = 'FAILED' THEN 1 END) AS failed_jobs,
     COALESCE(SUM(CASE WHEN j.payment_status = 'paid' THEN j.total_cost ELSE 0 END), 0) AS total_revenue,
     COALESCE(SUM(CASE WHEN j.status = 'COMPLETED' THEN j.pages ELSE 0 END), 0) AS total_pages_printed,
     ROUND(
-        COUNT(CASE WHEN j.status = 'COMPLETED' THEN 1 END)::NUMERIC / 
-        NULLIF(COUNT(j.id), 0) * 100, 
+        COUNT(CASE WHEN j.status = 'COMPLETED' THEN 1 END)::NUMERIC /
+        NULLIF(COUNT(j.id), 0) * 100,
         2
     ) AS success_rate
 FROM jobs j
@@ -257,14 +271,14 @@ WHERE j.created_at >= CURRENT_DATE - INTERVAL '30 days';
 \d admin_actions
 
 -- Show indexes
-SELECT tablename, indexname 
-FROM pg_indexes 
-WHERE schemaname = 'public' 
+SELECT tablename, indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
 ORDER BY tablename, indexname;
 
 -- Show views
-SELECT table_name 
-FROM information_schema.views 
+SELECT table_name
+FROM information_schema.views
 WHERE table_schema = 'public';
 
 -- ==================== SUCCESS MESSAGE ====================
