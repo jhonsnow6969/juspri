@@ -206,41 +206,6 @@ router.get('/jobs/poll', async (req, res) => {
     }
 });
 
-// Confirm manual duplex flip
-router.post('/jobs/:job_id/confirm-flip', verifyToken, async (req, res) => {
-    const { job_id } = req.params;
-
-    try {
-        const job = await db.getJob(job_id);
-        if (!job) return res.status(404).json({ error: 'Job not found' });
-        if (job.user_id !== req.user.uid) return res.status(403).json({ error: 'Forbidden' });
-        if (job.job_type !== 'duplex') return res.status(400).json({ error: 'Not a duplex job' });
-        if (job.status !== 'WAITING_FOR_FLIP') {
-            return res.status(409).json({ error: 'Job is not waiting for flip confirmation' });
-        }
-
-        const metadata = {
-            ...(job.metadata || {}),
-            flip_confirmed_at: new Date().toISOString(),
-            current_pass: 2
-        };
-
-        await db.updateJob(job_id, {
-            metadata,
-            status: 'PRINTING_PASS_2',
-            status_message: 'User confirmed paper flip',
-            last_status_update: new Date()
-        });
-
-        emitToKiosk(job.kiosk_id, 'duplex:flip_confirmed', { job_id });
-
-        return res.json({ success: true, job_id, status: 'PRINTING_PASS_2' });
-    } catch (error) {
-        console.error('[Confirm Flip] Error:', error);
-        return res.status(500).json({ error: 'Failed to confirm flip' });
-    }
-});
-
 // Get User Jobs
 router.get('/jobs/my-jobs', verifyToken, async (req, res) => {
     try {
@@ -290,7 +255,7 @@ router.get('/jobs/:job_id/status', verifyToken, async (req, res) => {
     }
 });
 
-// Get User Profile (role lookup) - instrumented for debugging
+// Get User Profile (role lookup)
 router.get('/user/profile', verifyToken, async (req, res) => {
     try {
       const user = await db.getUser(req.user.uid);
@@ -313,7 +278,5 @@ router.get('/user/profile', verifyToken, async (req, res) => {
       res.status(500).json({ error: 'Failed to fetch user profile' });
     }
   });
-  
-
 
 module.exports = router;
