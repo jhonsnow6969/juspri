@@ -29,8 +29,12 @@ async function createJob(job) {
         INSERT INTO jobs (
             id, user_id, kiosk_id, filename, file_path, file_size,
             pages, price_per_page, total_cost, status, payment_status,
-            created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+            job_type, metadata, created_at, updated_at, last_status_update
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10, $11,
+            $12, $13::jsonb, NOW(), NOW(), NOW()
+        )
         RETURNING *
     `;
     
@@ -45,7 +49,9 @@ async function createJob(job) {
         job.price_per_page,
         job.total_cost,
         job.status || 'PENDING',
-        job.payment_status || 'pending'
+        job.payment_status || 'pending',
+        job.job_type || 'print',
+        JSON.stringify(job.metadata || {})
     ];
     
     try {
@@ -79,7 +85,9 @@ async function updateJob(jobId, updates) {
     const allowedFields = [
         'status', 'payment_status', 'payment_id', 'print_token',
         'token_timestamp', 'error_message', 'pages_printed',
-        'paid_at', 'queued_at', 'print_started_at', 'print_completed_at'
+        'paid_at', 'queued_at', 'print_started_at', 'print_completed_at',
+        'metadata', 'status_message', 'last_status_update', 'job_type',
+        'output_file_url', 'scan_options'
     ];
     
     const setClause = [];
@@ -87,11 +95,18 @@ async function updateJob(jobId, updates) {
     let paramCounter = 1;
     
     for (const [key, value] of Object.entries(updates)) {
-        if (allowedFields.includes(key)) {
-            setClause.push(`${key} = $${paramCounter}`);
-            values.push(value);
+        if (!allowedFields.includes(key)) continue;
+
+        if (key === 'metadata' || key === 'scan_options') {
+            setClause.push(`${key} = $${paramCounter}::jsonb`);
+            values.push(typeof value === 'string' ? value : JSON.stringify(value || {}));
             paramCounter++;
+            continue;
         }
+
+        setClause.push(`${key} = $${paramCounter}`);
+        values.push(value);
+        paramCounter++;
     }
     
     if (setClause.length === 0) {
@@ -117,6 +132,34 @@ async function updateJob(jobId, updates) {
         console.error('Error updating job:', error);
         throw error;
     }
+}
+
+
+
+/**
+ * Transition job to a new state with consistent metadata updates.
+ */
+async function transitionJobState(jobId, status, options = {}) {
+    const updates = {
+        status,
+        status_message: options.status_message || options.message || null,
+        last_status_update: new Date()
+    };
+
+    if (options.error_message) updates.error_message = options.error_message;
+    if (typeof options.pages_printed === 'number') updates.pages_printed = options.pages_printed;
+
+    const knownTimestamps = {
+        PAID: 'paid_at',
+        QUEUED: 'queued_at',
+        PRINTING: 'print_started_at',
+        COMPLETED: 'print_completed_at'
+    };
+
+    const timestampKey = knownTimestamps[status];
+    if (timestampKey) updates[timestampKey] = new Date();
+
+    return updateJob(jobId, updates);
 }
 
 /**
@@ -464,6 +507,7 @@ module.exports = {
     createJob,
     getJob,
     updateJob,
+    transitionJobState,
     getJobs,
     deleteExpiredJobs,
     

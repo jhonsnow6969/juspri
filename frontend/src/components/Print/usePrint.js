@@ -22,6 +22,7 @@ export function usePrint() {
     const [cameraError, setCameraError] = useState(null);
     const [scannerActive, setScannerActive] = useState(true);
     const [printerStatusResult, setPrinterStatusResult] = useState(null);
+    const [printOptions, setPrintOptions] = useState({ duplex: false });
 
     const addLog = useCallback((msg) => {
         setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 49)]);
@@ -155,11 +156,14 @@ export function usePrint() {
                 if (jobStatus === 'COMPLETED') {
                     setStatus('COMPLETED');
                     clearInterval(pollInterval);
-                } else if (jobStatus === 'FAILED') {
+                } else if (jobStatus === 'FAILED' || jobStatus === 'CANCELLED') {
                     setStatus('ERROR');
                     clearInterval(pollInterval);
                     addLog(`Print failed: ${response.data.error_message || 'Unknown error'}`);
+                } else if (jobStatus === 'WAITING_FOR_FLIP') {
+                    addLog('Waiting for manual page flip confirmation...');
                 }
+
             } catch (e) {
                 console.error('Status poll error:', e);
             }
@@ -308,6 +312,8 @@ export function usePrint() {
         const fd = new FormData();
         fd.append('file', selectedFile);
         fd.append('kiosk_id', config.kiosk_id);
+        fd.append('job_type', printOptions.duplex ? 'duplex' : 'print');
+        fd.append('duplex', String(printOptions.duplex));
 
         try {
             const authHeader = await getAuthHeader();
@@ -328,6 +334,7 @@ export function usePrint() {
             });
             setStatus('PAYMENT');
             addLog(`Job created: ${pages} pages × ₹${price_per_page} = ₹${total_cost}`);
+            if (printOptions.duplex) addLog('Manual duplex enabled for this job.');
         } catch (e) {
             if (e.response?.status === 401) {
                 addLog('Session expired. Please log in again.');
@@ -338,7 +345,7 @@ export function usePrint() {
             setStatus('ERROR');
             addLog(`Error: ${e.response?.data?.error || e.message}`);
         }
-    }, [config, API_URL, addLog, getAuthHeader, signOut]);
+    }, [config, API_URL, addLog, getAuthHeader, signOut, printOptions.duplex]);
 
     const handlePayment = useCallback(async () => {
         setStatus('PRINTING');
@@ -374,6 +381,7 @@ export function usePrint() {
         setPricing(null);
         setPrinterStatusResult(null); 
         setScannerActive(true);
+        setPrintOptions({ duplex: false });
         addLog('Reset to scanner');
     }, [addLog]);
 
@@ -397,6 +405,7 @@ export function usePrint() {
         cameraError,
         scannerActive,
         printerStatusResult,
+        printOptions,
 
         // Handlers
         handleScan,
@@ -415,6 +424,7 @@ export function usePrint() {
         setFile,
         setPricing,
         setScannerActive,
-        setCameraError
+        setCameraError,
+        setPrintOptions
     };
 }

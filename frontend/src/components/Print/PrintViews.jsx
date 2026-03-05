@@ -359,7 +359,7 @@ export function ConnectView({ config, status, connectPrinter, resetFlow }) {
   );
 }
 
-export function FileUploadView({ file, status, handleFileSelect }) {
+export function FileUploadView({ file, status, handleFileSelect, printOptions, setPrintOptions }) {
   return (
     <div className="space-y-4">
       <label className="block w-full cursor-pointer group">
@@ -408,6 +408,22 @@ export function FileUploadView({ file, status, handleFileSelect }) {
         />
       </label>
     
+
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Manual Duplex</p>
+            <p className="text-xs text-muted-foreground">Print odd pages first, then flip and continue.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={Boolean(printOptions?.duplex)}
+            onChange={(e) => setPrintOptions({ duplex: e.target.checked })}
+            className="h-4 w-4 accent-white"
+          />
+        </label>
+      </div>
+
       {status === 'CALCULATING' && (
         <div className="flex items-center justify-center gap-3 text-foreground bg-white/5 rounded-lg p-4 border border-white/10">
           <Loader2 className="animate-spin h-5 w-5"/>

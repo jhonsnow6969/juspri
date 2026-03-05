@@ -4,6 +4,7 @@ const path = require('path');
 const db = require('../db');
 const { verifyToken, ensureUserExists } = require('../auth-middleware');
 const { upload, generateJobId, generatePrintToken, countPDFPages, PRICE_PER_PAGE } = require('./utils');
+const { emitToKiosk } = require('./socket-manager');
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ router.post('/connect', async (req, res) => {
 // Create Job (Upload)
 router.post('/jobs/create', verifyToken, upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { kiosk_id } = req.body;
+    const { kiosk_id, job_type = 'print', duplex = 'false' } = req.body;
     
     if (!kiosk_id) {
         fs.unlinkSync(req.file.path);
@@ -84,6 +85,8 @@ router.post('/jobs/create', verifyToken, upload.single('file'), async (req, res)
         const totalCost = pages * pricePerPage;
         const jobId = generateJobId();
         
+        const normalizedJobType = job_type === 'duplex' ? 'duplex' : 'print';
+
         await db.createJob({
             id: jobId,
             user_id: req.user.uid,
@@ -95,7 +98,13 @@ router.post('/jobs/create', verifyToken, upload.single('file'), async (req, res)
             price_per_page: pricePerPage,
             total_cost: totalCost,
             status: 'PENDING',
-            payment_status: 'pending'
+            payment_status: 'pending',
+            job_type: normalizedJobType,
+            metadata: {
+                duplex_requested: duplex === 'true',
+                job_type: normalizedJobType,
+                current_pass: normalizedJobType === 'duplex' ? 1 : null
+            }
         });
         
         console.log(`[Job] Created ${jobId} (${pages} pages)`);
@@ -107,7 +116,8 @@ router.post('/jobs/create', verifyToken, upload.single('file'), async (req, res)
             pages: pages,
             price_per_page: pricePerPage,
             total_cost: totalCost,
-            currency: 'INR'
+            currency: 'INR',
+            job_type: normalizedJobType
         });
     } catch (error) {
         console.error('Job creation error:', error);
@@ -193,6 +203,41 @@ router.get('/jobs/poll', async (req, res) => {
     } catch (error) {
         console.error('[Poll] Error:', error);
         res.status(500).json({ error: 'Failed to fetch jobs' });
+    }
+});
+
+// Confirm manual duplex flip
+router.post('/jobs/:job_id/confirm-flip', verifyToken, async (req, res) => {
+    const { job_id } = req.params;
+
+    try {
+        const job = await db.getJob(job_id);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+        if (job.user_id !== req.user.uid) return res.status(403).json({ error: 'Forbidden' });
+        if (job.job_type !== 'duplex') return res.status(400).json({ error: 'Not a duplex job' });
+        if (job.status !== 'WAITING_FOR_FLIP') {
+            return res.status(409).json({ error: 'Job is not waiting for flip confirmation' });
+        }
+
+        const metadata = {
+            ...(job.metadata || {}),
+            flip_confirmed_at: new Date().toISOString(),
+            current_pass: 2
+        };
+
+        await db.updateJob(job_id, {
+            metadata,
+            status: 'PRINTING_PASS_2',
+            status_message: 'User confirmed paper flip',
+            last_status_update: new Date()
+        });
+
+        emitToKiosk(job.kiosk_id, 'duplex:flip_confirmed', { job_id });
+
+        return res.json({ success: true, job_id, status: 'PRINTING_PASS_2' });
+    } catch (error) {
+        console.error('[Confirm Flip] Error:', error);
+        return res.status(500).json({ error: 'Failed to confirm flip' });
     }
 });
 
