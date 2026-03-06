@@ -1,7 +1,6 @@
-# 🖨️ JusPri 
+# 🖨️ JusPri
 
-
-A modern, cloud-based printing solution that enables users to print documents from any device to physical kiosk printers via QR codes and web interface.
+A cloud-based print, scan, and xerox kiosk system. Users scan a QR code, upload documents, pay, and print — all from their phone.
 
 ---
 
@@ -11,29 +10,27 @@ A modern, cloud-based printing solution that enables users to print documents fr
 - [Features](#-features)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Installation](#-installation)
-  - [Backend Setup](#1-backend-cloud-server)
-  - [Frontend Setup](#2-frontend-vercel)
-  - [Pi Agent Setup](#3-pi-agent-raspberry-pi)
 - [Configuration](#-configuration)
 - [Usage](#-usage)
-- [API Documentation](#-api-documentation)
+- [API Reference](#-api-reference)
+- [Testing](#-testing)
 - [Troubleshooting](#-troubleshooting)
-- [Feature Implementation Execution Guide](phase-docs/FEATURE_IMPLEMENTATION_EXECUTION_GUIDE.md)
 
 ---
 
 ## 🎯 Overview
 
-DirectPrint is a three-component system that allows users to:
-1. Scan a QR code at a physical kiosk
-2. Upload documents via web interface
-3. Pay and print instantly
+JusPri is a three-component kiosk system for libraries, universities, coworking spaces, and print shops:
 
-Perfect for libraries, universities, coworking spaces, and print shops.
+1. **Scan a QR code** at a physical kiosk
+2. **Upload documents** via a web interface on your phone
+3. **Pay per page** and print instantly
+4. **Scan documents** using the kiosk's eSCL-compatible scanner
 
-### **Live Demo**
+### Live URLs
 - **Frontend:** https://qr-wifi-printer.vercel.app
 - **Backend API:** https://justpri.duckdns.org
 
@@ -41,28 +38,35 @@ Perfect for libraries, universities, coworking spaces, and print shops.
 
 ## ✨ Features
 
-### **User Features**
-- 🔐 **Google OAuth Authentication** - Secure login
-- 📱 **QR Code Discovery** - Scan to connect to nearest kiosk
-- 📄 **Multi-Format Support** - PDF, DOCX, TXT, PNG, JPG
-- 💳 **Payment Integration** - Pay per page (Razorpay ready)
-- 📊 **Print History** - Track all your print jobs
-- 🔄 **Real-time Status** - Live job status updates
-- 🌐 **Responsive Design** - Works on all devices
+### Print
+- 📄 **Multi-format support** — PDF, DOCX, TXT, PNG, JPG (auto-converted to PDF)
+- 💳 **Pay per page** — Razorpay integration with configurable pricing
+- 🔄 **Real-time status** — Live job tracking via WebSocket
+- 🔒 **Row locking** — `FOR UPDATE SKIP LOCKED` prevents duplicate dispatch
+- 🔁 **Auto-retry** — Failed jobs retry up to 3 times
+- 📥 **File streaming** — Download URLs instead of base64 encoding
+- 🗑️ **Auto-cleanup** — Print queue files cleaned up after 30 minutes
+- 💾 **Disk protection** — 500MB limit on print queue directory
 
-### **Admin Features**
-- 🖨️ **Multiple Kiosks** - Manage unlimited print stations
-- 📈 **Usage Statistics** - Track prints, revenue, success rate
-- 🔧 **Remote Configuration** - Update settings remotely
-- 📡 **Live Monitoring** - See kiosk status in real-time
+### Scan
+- 🔍 **eSCL scanning** — Works with any AirScan/eSCL-compatible printer
+- 📤 **Cloud upload** — Scanned PDFs uploaded to backend automatically
+- ⬇️ **Download link** — Users get a download URL for their scanned document
 
-### **Technical Features**
-- 🚀 **Pull-Based Architecture** - Reliable job polling
-- 🔄 **Auto-Conversion** - Documents → PDF automatically
-- 🔒 **User Isolation** - Secure multi-tenant database
-- 📦 **PostgreSQL** - Persistent data storage
-- ⚡ **Socket.IO** - Real-time updates
-- 🐳 **Docker Ready** - Easy deployment
+### Xerox *(planned)*
+- 📋 **Scan → Print pipeline** — Scan a document and immediately print copies
+
+### Admin
+- 📊 **Dashboard** — System metrics, revenue, job counts
+- 🖨️ **Kiosk health** — Real-time printer status, paper counts
+- 📋 **Job management** — View and filter all jobs
+- 📝 **Audit logging** — Admin action tracking
+
+### Security
+- 🔐 **Firebase Auth** — Google OAuth login
+- 🔑 **JWT verification** — All API endpoints authenticated
+- 👥 **Role-based access** — user, admin, superadmin roles
+- 🛡️ **User isolation** — Users only see their own jobs
 
 ---
 
@@ -75,413 +79,356 @@ Perfect for libraries, universities, coworking spaces, and print shops.
 └────────┬────────┘
          │ HTTPS
          ▼
-┌─────────────────┐      ┌──────────────────┐
-│    Frontend     │◄────►│     Backend      │
-│  (Vercel/React) │      │ (Node.js/Express)│
-└─────────────────┘      └────────┬─────────┘
-                                  │
-                         ┌────────┴────────┐
-                         │   PostgreSQL    │
-                         │    Database     │
-                         └────────┬────────┘
-                                  │ Poll Jobs
-                                  ▼
-                         ┌─────────────────┐
-                         │    Pi Agent     │
-                         │  (Raspberry Pi) │
-                         └────────┬────────┘
-                                  │ CUPS
-                                  ▼
-                         ┌─────────────────┐
-                         │     Printer     │
-                         └─────────────────┘
+┌─────────────────┐      WebSocket      ┌──────────────────┐
+│    Frontend     │◄═══════════════════►│     Backend      │
+│  (React/Vite)   │      REST API       │ (Node.js/Express)│
+└─────────────────┘                     └────────┬─────────┘
+                                                 │
+                                        ┌────────┴────────┐
+                                        │   PostgreSQL    │
+                                        │    Database     │
+                                        └────────┬────────┘
+                                                 │ Poll + WebSocket
+                                                 ▼
+                                        ┌─────────────────┐
+                                        │    Pi Agent     │
+                                        │ (Node.js/CUPS)  │
+                                        └────────┬────────┘
+                                                 │ CUPS / eSCL
+                                                 ▼
+                                        ┌─────────────────┐
+                                        │  Printer/Scanner│
+                                        └─────────────────┘
 ```
 
-### **Data Flow**
+### Data Flow
 
-1. User scans QR code → Opens frontend with `?kiosk_id=xxx`
-2. User uploads file → Backend creates job (status: PENDING)
-3. User pays → Backend marks job as PAID
-4. Pi agent polls → Fetches PAID jobs (status: QUEUED)
-5. Pi converts & prints → Updates status (PRINTING → COMPLETED)
-6. User receives notification
+**Print:** User uploads file → Backend creates job → User pays → Pi Agent polls & claims job (row-locked) → Downloads file → Converts to PDF → Prints via CUPS → Status updates via WebSocket
+
+**Scan:** User clicks Scan → Backend creates scan job → WebSocket event to Pi → Pi scans via eSCL → Uploads PDF to backend → User gets download link
 
 ---
 
 ## 🛠️ Tech Stack
 
-### **Frontend**
-- React 18
-- Vite
-- TailwindCSS + shadcn/ui
-- React Router
-- Firebase Auth
-- Socket.IO Client
-- Axios
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React 18, Vite, TailwindCSS, shadcn/ui, Firebase Auth, Socket.IO Client |
+| **Backend** | Node.js, Express, PostgreSQL, Socket.IO, Firebase Admin SDK, Multer, Razorpay |
+| **Pi Agent** | Node.js, Socket.IO Client, CUPS, LibreOffice, pdf-lib, eSCL/AirScan (xml2js, axios) |
+| **Database** | PostgreSQL with views, triggers, constraints, JSONB fields |
 
-### **Backend**
-- Node.js
-- Express.js
-- PostgreSQL
-- Socket.IO
-- Firebase Admin SDK
-- Multer (file uploads)
+---
 
-### **Pi Agent**
-- Node.js
-- Socket.IO Client
-- CUPS (printing)
-- LibreOffice (document conversion)
-- ImageMagick (image conversion)
-- pdf-lib (PDF manipulation)
+## 📁 Project Structure
+
+```
+juspri/
+├── backend/
+│   ├── index.js               # Express server + Socket.IO setup
+│   ├── db.js                  # PostgreSQL abstraction layer
+│   ├── auth-middleware.js     # Firebase JWT verification
+│   ├── schema.sql             # Complete database schema
+│   ├── setup-db.sql           # Initial DB/user creation
+│   └── modules/
+│       ├── job-routes.js      # Print, scan, download endpoints
+│       ├── admin-routes.js    # Admin dashboard API
+│       ├── kiosk-routes.js    # Public kiosk status endpoint
+│       ├── socket-manager.js  # WebSocket event handling
+│       ├── tasks.js           # Scheduled cleanup tasks
+│       └── utils.js           # File upload, PDF utils
+│
+├── frontend/
+│   └── src/
+│       ├── App.jsx            # Router setup
+│       ├── firebase.js        # Firebase config
+│       └── components/
+│           ├── Print/         # Upload, print, scan UI
+│           ├── Admin/         # Admin dashboard components
+│           ├── Dashboard/     # User dashboard
+│           ├── Login.jsx      # Google OAuth login
+│           └── ui/            # Shared UI components
+│
+├── pi-agent/
+│   ├── index.js               # Main entry, config, init
+│   └── modules/
+│       ├── socket-client.js   # WebSocket connection + scan handler
+│       ├── job-handler.js     # Job polling, processing, printing
+│       ├── scanner.js         # eSCL scanner module
+│       ├── printer.js         # CUPS printing + status checks
+│       ├── utils.js           # File conversion (DOCX→PDF, IMG→PDF)
+│       ├── logger.js          # Console logging
+│       └── errors.js          # Custom error types
+│
+├── TESTING.md                 # Full testing guide
+└── README.md                  # This file
+```
 
 ---
 
 ## 📦 Prerequisites
 
-### **For Backend:**
-- Node.js >= 20.x
-- PostgreSQL >= 12.x
-- Ubuntu/Debian server (or Oracle Cloud VM)
-- Domain name (optional: DuckDNS)
+### Backend
+- Node.js ≥ 16
+- PostgreSQL ≥ 12
+- Firebase project (for auth)
 
-### **For Frontend:**
-- Node.js >= 20.x
-- Vercel account (free)
-- Firebase project (for OAuth)
+### Frontend
+- Node.js ≥ 16
+- Vercel account (for deployment)
 
-### **For Pi Agent:**
-- Raspberry Pi (any model with WiFi)
-- Raspberry Pi OS / Ubuntu / Arch Linux
-- USB/Network printer
-- Internet connection
+### Pi Agent
+- Raspberry Pi (any model with WiFi) or any Linux machine
+- USB/network printer with CUPS support
+- *(Optional)* eSCL/AirScan-compatible printer for scanning
+- CUPS, LibreOffice, ImageMagick installed
 
 ---
 
 ## 🚀 Installation
-### **1. Backend (Cloud Server)**
-#### **Step 1: Clone Repository**
-```bash
-git clone https://github.com/revanthlol/qr-wifi-printer.git
-cd qr-wifi-printer/backend
-```
-#### **Step 2: Install Dependencies**
-```bash
-npm install
-```
-#### **Step 3: Setup PostgreSQL**
-```bash
-# Install PostgreSQL
-sudo apt install postgresql postgresql-contrib
 
-# Create database
+### 1. Backend
+
+```bash
+cd backend
+npm install
+
+# Setup PostgreSQL
 sudo -u postgres psql
 CREATE DATABASE printkiosk;
-CREATE USER printuser WITH PASSWORD 'your_secure_password';
+CREATE USER printuser WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE printkiosk TO printuser;
 \q
 
 # Run schema
-psql -U printuser -d printkiosk < schema.sql
-```
-#### **Step 4: Configure Environment**
-```bash
-# Create .env file
-cp .env.example .env
-nano .env
-```
-```env
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=printkiosk
-DB_USER=printuser
-DB_PASSWORD=your_secure_password
-
-# Server
-PORT=3001
-NODE_ENV=production
-
-# Security
-SECRET_KEY=your_very_long_random_secret_key
-
-# CORS
-ALLOWED_ORIGINS=https://your-frontend.vercel.app
-
-# Firebase
-FIREBASE_SERVICE_ACCOUNT_PATH=./config/firebase-service-account.json
-```
-
-#### **Step 5: Start Backend**
-```bash
-# Development
-npm run dev
-
-# Production (with PM2)
-npm install -g pm2
-pm2 start index.js --name juspri-backend
-pm2 save
-pm2 startup
-```
-
-**Full backend setup guide:** [ORACLE_VM_DEPLOYMENT_GUIDE.md](phase_docs/docs/ORACLE_VM_DEPLOYMENT_GUIDE.md)
-
----
-
-### **2. Frontend (Vercel)**
-
-#### **Step 1: Setup Firebase**
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create new project
-3. Enable Google Authentication
-4. Get Firebase config
-
-#### **Step 2: Deploy to Vercel**
-```bash
-cd frontend
-
-# Install Vercel CLI
-npm install -g vercel
-
-# Deploy
-vercel
-
-# Set environment variables in Vercel dashboard
-```
-
-#### **Step 3: Configure Environment Variables**
-
-In Vercel Dashboard → Settings → Environment Variables:
-
-```env
-VITE_API_URL=https://your-backend.com
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123456789:web:abc123
-```
-
-**Full frontend setup guide:** [VERCEL_DEPLOYMENT_GUIDE.md](docs/VERCEL_DEPLOYMENT_GUIDE.md)
-
----
-
-### **3. Pi Agent (Raspberry Pi)**
-
-#### **Automated Setup (Recommended)**
-
-```bash
-# Download setup script
-wget https://raw.githubusercontent.com/revanthlol/qr-wifi-printer/main/setup-pi-agent.sh
-
-# Make executable
-chmod +x setup-pi-agent.sh
-
-# Run setup
-./setup-pi-agent.sh
-```
-
-The script will:
-- ✅ Install Node.js, CUPS, LibreOffice, ImageMagick
-- ✅ Download pi-agent code (sparse checkout)
-- ✅ Configure environment variables
-- ✅ Create systemd service for auto-start
-- ✅ Setup QR display server (optional)
-
-#### **Manual Setup**
-
-```bash
-# Install dependencies
-sudo apt update
-sudo apt install -y nodejs npm cups libreoffice-writer imagemagick git
-
-# Clone pi-agent only (sparse checkout)
-mkdir ~/directprint-agent
-cd ~/directprint-agent
-git init
-git remote add origin https://github.com/revanthlol/qr-wifi-printer.git
-git config core.sparseCheckout true
-echo "pi-agent/*" > .git/info/sparse-checkout
-git pull origin main
-mv pi-agent/* .
-
-# Install npm packages
-npm install
+psql -U printuser -d printkiosk -f schema.sql
 
 # Configure
 cp .env.example .env
-nano .env
+# Edit .env with your settings (see Configuration section)
+
+# Start
+npm run dev           # Development (with nodemon)
+pm2 start index.js    # Production
 ```
 
-**Configuration (.env):**
-```env
-CLOUD_URL=https://your-backend.com
-FRONTEND_URL=https://your-frontend.vercel.app
-KIOSK_ID=kiosk_001
-PRINTER_NAME=auto
-POLL_INTERVAL=5000
-```
+### 2. Frontend
 
-**Start Service:**
 ```bash
-# Manual start
+cd frontend
+npm install
+
+# Configure environment variables (see Configuration section)
+# Set VITE_API_URL and Firebase config in .env or Vercel dashboard
+
+npm run dev           # Development
+vercel                # Deploy to Vercel
+```
+
+### 3. Pi Agent
+
+```bash
+cd pi-agent
+npm install
+
+# Install system dependencies
+sudo apt install cups libreoffice-writer imagemagick
+
+# Configure
+cp .env.example .env
+# Edit .env with your settings
+
+# Start
 node index.js
 
-# Or use systemd (created by setup script)
-sudo systemctl start directprint-agent
-sudo systemctl enable directprint-agent
+# Or install as systemd service for auto-start
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-### **Backend Configuration**
+### Backend `.env`
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Server port | 3001 |
-| `DB_HOST` | PostgreSQL host | localhost |
-| `DB_NAME` | Database name | printkiosk |
-| `SECRET_KEY` | JWT secret | (required) |
-| `ALLOWED_ORIGINS` | CORS origins | (required) |
-| `PRICE_PER_PAGE` | Default price in ₹ | 3 |
+| `PORT` | Server port | `3001` |
+| `DB_HOST` | PostgreSQL host | `localhost` |
+| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_NAME` | Database name | `printkiosk` |
+| `DB_USER` | Database user | `printuser` |
+| `DB_PASSWORD` | Database password | *(required)* |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins | Vercel + localhost |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | Path to Firebase service account JSON | `./config/firebase-service-account.json` |
+| `BACKEND_URL` | Public URL of backend (for scan download links) | — |
 
-### **Frontend Configuration**
+### Frontend (Vercel / `.env`)
 
 | Variable | Description |
 |----------|-------------|
 | `VITE_API_URL` | Backend API URL |
-| `VITE_FIREBASE_*` | Firebase config |
+| `VITE_FIREBASE_API_KEY` | Firebase API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
 
-### **Pi Agent Configuration**
+### Pi Agent `.env`
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CLOUD_URL` | Backend URL | (required) |
-| `KIOSK_ID` | Unique kiosk identifier | kiosk_hostname |
-| `PRINTER_NAME` | CUPS printer name | auto |
-| `POLL_INTERVAL` | Job polling interval (ms) | 5000 |
+| `CLOUD_URL` | Backend URL | `https://justpri.duckdns.org` |
+| `FRONTEND_URL` | Frontend URL (for QR code) | `https://qr-wifi-printer.vercel.app` |
+| `KIOSK_ID` | Unique kiosk identifier | `kiosk_{hostname}` |
+| `PRINTER_NAME` | CUPS printer name | `auto` (auto-detect) |
+| `POLL_INTERVAL` | Job polling interval in ms | `2000` |
 
 ---
 
 ## 📖 Usage
 
-### **For Users:**
+### For Users
 
-1. **Scan QR Code** at kiosk
-2. **Login** with Google
-3. **Upload** document (PDF, DOCX, images)
-4. **Pay** for pages
-5. **Collect** printed document
+1. **Scan** the QR code displayed at the kiosk
+2. **Login** with your Google account
+3. **Upload** a document (PDF, DOCX, TXT, or image)
+4. **Review** page count and price
+5. **Pay** via Razorpay
+6. **Collect** your printed document
 
-### **For Admins:**
+### For Admins
 
-1. **Monitor** kiosks via dashboard
-2. **View** print statistics
-3. **Manage** pricing per kiosk
-4. **Check** job history
+1. Login with an admin account (set via `UPDATE users SET role = 'admin' WHERE email = '...'`)
+2. Navigate to `/admin` in the frontend
+3. Monitor kiosk health, job history, and system metrics
+4. Manage paper counts per kiosk
 
 ---
 
-## 🔌 API Documentation
+## 🔌 API Reference
 
-### **Authentication**
-All API endpoints (except `/api/connect`) require Firebase JWT token:
-```
-Authorization: Bearer <firebase-id-token>
-```
+### Public Endpoints
 
-### **Endpoints**
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/kiosk/status?kiosk_id=xxx` | Check kiosk/printer status |
+| `POST` | `/api/connect` | Legacy kiosk connection check |
 
-#### **Jobs**
-- `POST /api/jobs/create` - Create print job
-- `GET /api/jobs/my-jobs` - Get user's jobs
-- `GET /api/jobs/:id/status` - Get job status
-- `POST /api/jobs/:id/verify-payment` - Mark as paid
-- `GET /api/jobs/poll?kiosk_id=xxx` - Poll for jobs (Pi agent)
+### Authenticated Endpoints (Firebase JWT required)
 
-#### **Users**
-- `GET /api/users/stats` - Get user statistics
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/jobs/create` | Upload file and create print job |
+| `POST` | `/api/jobs/:id/verify-payment` | Mark job as paid |
+| `POST` | `/api/jobs/scan` | Create a scan job |
+| `GET` | `/api/jobs/:id/download` | Download job file |
 
-#### **Kiosks**
-- `POST /api/connect` - Check kiosk status (public)
+### Pi Agent Endpoints
 
-**Full API docs:** [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/jobs/poll?kiosk_id=xxx` | Poll for paid jobs (row-locked) |
+| `GET` | `/api/jobs/:id/download` | Download file for printing |
+| `POST` | `/api/jobs/:id/scan-upload` | Upload scanned file |
+
+### Admin Endpoints (admin role required)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/admin/metrics` | System-wide statistics |
+| `GET` | `/api/admin/kiosks` | All kiosks with status |
+| `GET` | `/api/admin/jobs` | Filterable job list |
+| `GET` | `/api/admin/recent-jobs` | Recent jobs with user info |
+| `POST` | `/api/admin/kiosks/:id/set-paper` | Update paper count |
+
+### WebSocket Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `register` | Pi → Backend | Kiosk registration |
+| `heartbeat` | Pi → Backend | Periodic health update |
+| `job_state_change` | Pi → Backend | Job status update |
+| `scan_job` | Backend → Pi | Trigger scan on kiosk |
+| `update_config` | Backend → Pi | Remote config update |
+
+---
+
+## 🧪 Testing
+
+See [TESTING.md](TESTING.md) for the complete testing guide covering:
+- Database verification
+- Backend API tests (all endpoints)
+- Pi Agent tests (printing, scanning, retry logic)
+- Frontend tests (user flow, admin dashboard)
+- WebSocket tests
+- End-to-end smoke test checklist
 
 ---
 
 ## 🐛 Troubleshooting
 
-### **Backend Issues**
-
-**Database connection failed:**
+### Backend won't start
 ```bash
 # Check PostgreSQL is running
 sudo systemctl status postgresql
 
-# Test connection
+# Test database connection
 psql -U printuser -d printkiosk -h localhost
 ```
 
-**CORS errors:**
+### Pi Agent can't connect
 ```bash
-# Update ALLOWED_ORIGINS in .env
-ALLOWED_ORIGINS=https://your-frontend.vercel.app,https://another-domain.com
+# Test backend connectivity
+curl https://your-backend.com/api/kiosk/status?kiosk_id=test
+
+# Check pi-agent logs for WebSocket errors
 ```
 
-### **Frontend Issues**
-
-**API calls fail:**
-- Check `VITE_API_URL` is correct
-- Ensure backend CORS allows your domain
-- Check browser console for errors
-
-**Login doesn't work:**
-- Verify Firebase configuration
-- Check Firebase Auth is enabled
-- Ensure authorized domains include your Vercel URL
-
-### **Pi Agent Issues**
-
-**Can't connect to backend:**
+### Printer not found
 ```bash
-# Test connectivity
-curl https://your-backend.com/api/status
-
-# Check logs
-sudo journalctl -u directprint-agent -f
-```
-
-**Image conversion fails:**
-```bash
-# Fix ImageMagick policy
-sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
-```
-
-**Printer not found:**
-```bash
-# List printers
+# List CUPS printers
 lpstat -p -d
 
 # Set default printer
 lpoptions -d printer_name
 ```
 
-**Full troubleshooting guide:** [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+### Scanner not working
+```bash
+# Test eSCL availability
+curl http://PRINTER_IP/eSCL/ScannerCapabilities
+
+# Try HTTPS if HTTP fails
+curl -k https://PRINTER_IP/eSCL/ScannerCapabilities
+
+# Verify printer and Pi are on the same network
+```
+
+### Image conversion fails
+```bash
+# Fix ImageMagick policy for PDF
+sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
+```
+
+### CORS errors
+```bash
+# Update ALLOWED_ORIGINS in backend .env
+ALLOWED_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173
+```
+
 ---
 
-## 🗺️ Roadmap
+## 📊 Database Schema
 
-- [ ] Razorpay payment integration
-- [ ] Multiple payment methods
-- [ ] Color/B&W printing options
-- [ ] Double-sided printing
-- [ ] Admin dashboard
-- [ ] Email receipts
-- [ ] Job scheduling
-- [ ] Print presets
-- [ ] Mobile app (React Native)
+**4 tables:** `users`, `kiosks`, `jobs`, `admin_actions`
 
----
+**4 views:** `active_jobs`, `kiosk_stats`, `daily_kiosk_stats`, `system_metrics`
+
+**Job types:** `print`, `scan`, `xerox`
+
+**Job statuses:**
+- Print: `PENDING` → `PAID` → `QUEUED` → `SENT_TO_PI` → `PRINTING` → `COMPLETED`
+- Scan: `QUEUED` → `DISCOVERING_SCANNER` → `SCANNING` → `PROCESSING` → `COMPLETED`
+- Xerox: `SCANNING_ORIGINAL` → `PROCESSING_COPY` → `PRINTING_COPY` → `COMPLETED`
+- Error: `FAILED`, `EXPIRED`, `CANCELLED`

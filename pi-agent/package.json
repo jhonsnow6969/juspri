@@ -12,6 +12,7 @@
         "axios": "^1.13.5",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
+        "form-data": "^4.0.0",
         "node-addon-api": "^8.5.0",
         "pdf-lib": "^1.17.1",
         "qrcode": "^1.5.4",
